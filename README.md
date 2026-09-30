@@ -1,5 +1,16 @@
 # Gemini via Iran-side Shecan
 
+## Install (menu)
+
+On each server (as root):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mahdizo3181/shecan-manager/main/gemini-menu.sh -o /usr/local/bin/gemini-menu && chmod +x /usr/local/bin/gemini-menu
+gemini-menu
+```
+
+`setup-iran.sh` and `setup-foreign.sh` are thin wrappers around `gemini-menu.sh`; keep them in the same folder.
+
 Routes 9 Gemini hostnames out of the foreign 3X-UI Xray through a small relay on the Iran server, so they leave from the Iran IP that is registered with Shecan. Everything else keeps using the existing routing.
 
 ```
