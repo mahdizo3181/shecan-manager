@@ -240,8 +240,7 @@ if grep -rnP '[\x{0600}-\x{06FF}\x{FB50}-\x{FDFF}\x{FE70}-\x{FEFF}]' src dist ge
 if grep -rnE 'read -[a-z]*s[a-z]* |prompt_secret|in_read_secret' src >"$sd2/s" 2>&1; then bad "no hidden (silent) input anywhere" "$(head -3 "$sd2/s")"; else ok; fi
 if grep -rnE 'any key|Press any' src >"$sd2/k" 2>&1; then bad "no 'press any key' pauses" "$(head -3 "$sd2/k")"; else ok; fi
 if grep -rnE 'menu_item (main|health|domains|service|logs|backups|f_[a-z]+) [a-z] ' src/app >"$sd2/m" 2>&1; then bad "no letter-key menu items" "$(head -3 "$sd2/m")"; else ok; fi
-n_typed=$(grep -rn 'confirm_typed' src/app | grep -vc '^src/app/[0-9a-z-]*\.sh:[0-9]*:\s*#')
-eq "typed-word confirmations exist only for purges (uninstall, whole-DB restore)" 3 "$(grep -rn 'confirm_typed[a-z_]* "' src/app | wc -l)"
+eq "typed-word confirmations exist only for purges (uninstall, whole-DB restore)" 2 "$(grep -rn 'confirm_typed[a-z_]* "' src/app | wc -l)"
 
 # ============================== bundles =========================================================
 bash -n dist/demo.sh && ok || bad "demo bundle syntax"
