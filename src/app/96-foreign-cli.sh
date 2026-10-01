@@ -19,7 +19,7 @@ gemini-menu foreign <command> [flags]
   backups [list|diff N|restore N]
   revert                  remove ir-gemini + its rules (restores the pre-tool template)
   rollback [--backup-dir D] [--restore-full-db]    undo the newest run that changed something
-  install-self            install this file as /usr/local/bin/gemini-menu
+  install                 install this file as /usr/local/bin/gemini-menu + the command  gemini
 EOF2
 }
 
@@ -93,7 +93,7 @@ foreign_cli() {
       esac ;;
     revert)       act_run "Revert everything" foreign_act_revert; return $? ;;
     rollback)     act_run "Rollback" foreign_act_rollback; return $? ;;
-    install-self) act_run "Install this tool" iran_act_install_self; return $? ;;
+    install | install-self) act_run "Install the gemini command" gm_act_install; return $? ;;
     help)         foreign_usage; return 0 ;;
     *)            ui_err "unknown foreign command: $c"; foreign_usage >&2; return 2 ;;
   esac

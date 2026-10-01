@@ -227,7 +227,6 @@ main() {
     ui_err "no terminal available: run this from an interactive shell"
     return 1
   fi
-  ui_banner "GEMINI $G_DOT SHECAN" "Phase 1 foundation demo $G_DOT v$GM_VERSION"
   menu_run main        # its own statement (never after || / if): see 40-action.sh
   ui_blank
   ui_note "bye"

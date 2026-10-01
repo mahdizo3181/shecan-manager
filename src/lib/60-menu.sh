@@ -24,11 +24,19 @@
 #     r) Refresh                      0) Exit      (0 = Back on a sub-screen)
 # Input is a line: type the number, edit with backspace/arrows, press Enter. Nothing fires on a
 # single keypress. Unknown input prints one inline error; the screen is NOT redrawn.
+#
+# Screen management (real terminals only; pipes and logs never get escape codes):
+#   * every menu screen is drawn from the top of a CLEARED screen, so it stays compact and fixed;
+#   * an action runs on its own cleared screen, with its progress and result visible;
+#   * when it ends the output stays until you press Enter ("Press Enter to return to the menu"), then
+#     the screen clears and the refreshed dashboard appears, with a "Last action" line.
+#   GM_PAUSE=0 skips that Enter (the screen then clears the moment an action ends).
 # (q / b are still understood as quiet aliases of 0, but they are not advertised.)
 
 declare -A M_TITLE=() M_ITEMS=() M_STATUS=() M_BUILD=()
 MENU_STACK=()
 MENU_QUIT=0 MENU_REDRAW=0 MENU_WHY=""
+MENU_LAST=""            # "[OK] Setup": the result of the last action, shown under the dashboard
 MENU_US=$'\x1f'
 MENU_RESERVED=" 0 r q b back quit exit refresh "
 
@@ -69,12 +77,14 @@ menu_render() {  # menu_render NAME
   local name=$1 crumbs key label hint handler enable why i n=0 kw=0 lw=0 rem kc lc hc left right dm back_word
   local -a K=() L=() H=() W=() X=()
   ui_width
+  ui_clear
   if [[ -n ${M_BUILD[$name]:-} ]]; then "${M_BUILD[$name]}"; fi
-  ui_blank
+  if ((!UI_TTY)); then ui_blank; fi
   if [[ -n ${M_STATUS[$name]:-} ]]; then
     "${M_STATUS[$name]}"
-    ui_blank
   fi
+  if [[ -n $MENU_LAST ]]; then ui_say "${C_DIM}Last action:${C_0} $MENU_LAST"; fi
+  ui_blank
   while IFS=$MENU_US read -r key label hint handler enable; do
     [[ -n $key ]] || continue
     why=""
@@ -131,6 +141,32 @@ menu_pop() {  # 0 / back: one level up; at the top level it leaves the menu
   fi
 }
 
+# The screen an action runs on: cleared, titled, so its progress shows cleanly from the top.
+menu_output_begin() {
+  ui_clear
+  ui_rule "$1"
+}
+
+# After an action: keep what it printed until the user is done reading, then the menu redraws (and clears).
+menu_output_end() {
+  if ((IN_TTY)) && [[ ${GM_PAUSE:-1} != 0 ]]; then
+    ui_blank
+    in_read _ "  Press Enter to return to the menu: " || true
+  fi
+  MENU_REDRAW=1
+}
+
+menu_set_last() {  # menu_set_last RC "label"
+  local badge
+  case $1 in
+    0)   if is_dry; then ui_badge badge warn "DRY-RUN"; else ui_badge badge ok "OK"; fi ;;
+    10)  ui_badge badge warn "CANCELLED" ;;
+    130) ui_badge badge warn "INTERRUPTED" ;;
+    *)   ui_badge badge fail "FAILED" ;;
+  esac
+  MENU_LAST="$badge $2"
+}
+
 menu_invoke() {  # menu_invoke "label" handler
   local label=$1 handler=$2 kind arg
   local -a argv=()
@@ -144,19 +180,23 @@ menu_invoke() {  # menu_invoke "label" handler
       ;;
     action)
       read -r -a argv <<<"$arg"
+      menu_output_begin "$label"
       act_run "$label" "${argv[@]}"
       if ((ACT_RC != 10)); then probe_invalidate; fi      # a cancelled action changed nothing
-      MENU_REDRAW=1
+      menu_set_last "$ACT_RC" "$label"
+      menu_output_end
       ;;
     view)
       read -r -a argv <<<"$arg"
+      menu_output_begin "$label"
       ACT_QUIET_OK=1 act_run "$label" "${argv[@]}"
-      MENU_REDRAW=1
+      menu_output_end
       ;;
     call)
       read -r -a argv <<<"$arg"
+      menu_output_begin "$label"
       "${argv[@]}" || ui_err "'${argv[0]}' returned an error"
-      MENU_REDRAW=1
+      menu_output_end
       ;;
     back) menu_pop ;;
     quit) MENU_QUIT=1 ;;

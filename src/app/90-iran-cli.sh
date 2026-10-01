@@ -21,7 +21,7 @@ gemini-menu iran <command> [flags]
   backups [list|diff N|restore N|undo N]
   rollback [--backup-dir D]     undo the newest run that changed something
   uninstall               remove only what this tool created
-  install-self            install this file as /usr/local/bin/gemini-menu (the timer runs it)
+  install                 install this file as /usr/local/bin/gemini-menu + the command  gemini  (the timer runs it)
   watch                   one health-timer run (used by systemd)
 
 Flags: --dry-run  --yes  --foreign-ip IP  --ss-port N  --key-file F  --shecan-url-file F
@@ -91,7 +91,7 @@ iran_cli() {
       esac ;;
     rollback)        act_run "Rollback" iran_act_rollback; return $? ;;
     uninstall)       act_run "Uninstall the Iran relay" iran_act_uninstall; return $? ;;
-    install-self)    act_run "Install this tool" iran_act_install_self; return $? ;;
+    install | install-self) act_run "Install the gemini command" gm_act_install; return $? ;;
     watch)           act_run "Health timer run" iran_act_watch; return $? ;;
     help)            iran_usage; return 0 ;;
     *)               ui_err "unknown iran command: $c"; iran_usage >&2; return 2 ;;

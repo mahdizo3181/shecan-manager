@@ -18,7 +18,7 @@ listener = subprocess.Popen([sys.executable, "-c", "import socket,sys\ns=socket.
 key = os.path.join(sb, "ss.key"); subprocess.run(f"openssl rand -base64 16 >{key}; chmod 600 {key}", shell=True, check=True)
 time.sleep(0.4)
 env = dict(os.environ, PATH=FIX + ":" + os.environ["PATH"], GM_ROOT=R, GM_FAKE=os.path.join(sb, "fake"), GM_ASSUME_ROOT="1",
-           XUI_FAKE_DB=DB, XUI_FAKE_DIR=os.path.join(R, "usr/local/x-ui/bin"), GM_WAIT_XRAY="4", GM_XRAY_POLL="0.3",
+           XUI_FAKE_DB=DB, XUI_FAKE_DIR=os.path.join(R, "usr/local/x-ui/bin"), GM_WAIT_XRAY="4", GM_XRAY_POLL="0.3", GM_FORCE_LINK="1",
            GM_STATUS_TTL="0", TERM="xterm", LANG="C.UTF-8")
 for k in ("GM_INPUT", "GM_ASCII", "GM_COLOR", "NO_COLOR"): env.pop(k, None)
 
@@ -47,14 +47,17 @@ t.send("2\r")
 check("switching OFF warns about the restart and asks a plain 'Proceed? [y/N]: '", t.expect(r"restart") and t.expect(r"Proceed\? \[y/N\]: "))
 t.send("continue\r"); check("'continue' does not abort: it asks again", t.expect(r"please answer y or n \(Enter = no\)"))
 t.send("\r"); check("Enter = No: CANCELLED", t.expect(r"\[CANCELLED\]"))
+t.back()
 check("...the panel template is unchanged", not off_state())
 t.expect(r"Select an option")
 t.send("2\r"); t.expect(r"Proceed\? \[y/N\]: "); t.send("y\r")
 check("y: backup, compare-and-swap write, restart, verify", t.expect(r"Write the template \(compare-and-swap\)") and t.expect(r"\[ OK \]", 20))
 check("...the template is OFF now", off_state())
+t.back()
 t.expect(r"Select an option")
 t.send("1\r"); t.expect(r"Proceed\? \[y/N\]: "); t.send("YES\r"); check("switching back ON ('YES' is accepted)", t.expect(r"\[ OK \]", 20) and not off_state())
-t.expect(r"Select an option"); t.send("b\r"); t.expect(r"Foreign server\s*❯", 20)
+t.back()
+t.expect(r"Select an option"); t.send("0\r"); t.expect(r"Select an option", 20)
 
 # interactive scope picker: junk is rejected, b cancels, nothing applied
 sha = tpl()
@@ -65,6 +68,7 @@ t.send("*\r"); check("'*' is rejected, never expanded", t.expect(r"is not valid 
 t.send("1a\r"); check("'1a' is rejected with a message (no bash error)", t.expect(r"is not valid here") and "value too great" not in t.all)
 t.send("2\r"); check("a number toggles", t.expect(r"\[ \] 2"))
 t.send("b\r"); check("b cancels the whole action", t.expect(r"\[CANCELLED\]"))
+t.back()
 check("...no ghost ticks applied", tpl() == sha)
 t.expect(r"Select an option"); t.send("0\r"); t.expect(r"Select an option")
 

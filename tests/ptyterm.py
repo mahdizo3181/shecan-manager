@@ -7,16 +7,17 @@ results = []
 
 
 class Term:
-    def __init__(self, argv, env_extra=None):
+    def __init__(self, argv, env_extra=None, rows=40):
         env = dict(os.environ, TERM="xterm", LANG="C.UTF-8", DEMO_DNS_DELAY="0.3")
         env.pop("NO_COLOR", None); env.pop("GM_INPUT", None); env.pop("GM_ASCII", None); env.pop("GM_COLOR", None)
         env.update(env_extra or {})
         self.pid, self.fd = pty.fork()
         if self.pid == 0:
             os.execvpe(argv[0], argv, env)
-        fcntl.ioctl(self.fd, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 100, 0, 0))
+        fcntl.ioctl(self.fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, 100, 0, 0))
         self.buf = ""
         self.all = ""
+        self.raw = ""
 
     def pump(self, timeout):
         end = time.time() + timeout
@@ -29,7 +30,9 @@ class Term:
                     return False
                 if not data:
                     return False
-                text = ANSI.sub("", data.decode("utf-8", "replace"))
+                dec = data.decode("utf-8", "replace")
+                self.raw += dec
+                text = ANSI.sub("", dec)
                 self.buf += text
                 self.all += text
         return True
@@ -45,6 +48,18 @@ class Term:
             if not self.pump(0.2) and not rx.search(self.buf):
                 break
         return bool(rx.search(self.buf))
+
+    CLEAR = "\x1b[H\x1b[2J"
+
+    def clears(self):
+        """How many times the screen has been cleared so far."""
+        return self.raw.count(self.CLEAR)
+
+    def back(self, timeout=10):
+        """An action ended: its output stays until Enter. Wait for the prompt, then press Enter."""
+        ok = self.expect(r"Press Enter to return to the menu", timeout)
+        self.send("\r")
+        return ok
 
     def send(self, s):
         os.write(self.fd, s.encode())

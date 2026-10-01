@@ -23,7 +23,7 @@ def sandbox(name):
     env = dict(os.environ, PATH=FIX + ":" + os.environ["PATH"], GM_ROOT=os.path.join(sb, "root"),
                GM_FAKE=os.path.join(sb, "fake"), GM_ASSUME_ROOT="1", GM_DNS_RETRY_SLEEP="0",
                GM_POLL_SLEEP="0.2", GM_WATCH_SLEEP="0", GM_STATUS_TTL="0", TERM="xterm", LANG="C.UTF-8",
-               SHECAN_REGISTER_URL="https://shecan.invalid/register?token=SECRET123")
+               SHECAN_REGISTER_URL="https://shecan.invalid/register?token=SECRET123", GM_FORCE_LINK="1")
     for k in ("GM_INPUT", "GM_ASCII", "GM_COLOR", "NO_COLOR"):
         env.pop(k, None)
     return sb, env
@@ -69,6 +69,8 @@ t.send("not-an-ip\r")
 check("typo -> inline error, prompt stays", t.expect(r"not an IPv4 address") and t.expect(r"Foreign server IPv4 to allow"))
 t.send("\r")
 check("Enter takes the current IP: re-check, not 'already set'", t.expect(r"re-checking its firewall rule") and t.expect(r"\[ OK \]"))
+check("the result stays on screen until Enter", t.back())
+check("...then the dashboard is back with a 'Last action' line", t.expect(r"Last action: \[OK\] Change Allowed Foreign IP"))
 t.expect(r"Select an option")
 
 # break the firewall behind its back, refresh, repair from the menu
@@ -81,6 +83,7 @@ check("Health Check & Status screen opens", t.expect(r"Iran relay › Health Che
 t.expect(r"Select an option")
 t.send("3\r")
 check("...'Repair the firewall rule' re-adds it", t.expect(r"rule was missing - added") and t.expect(r"\[ OK \]"))
+t.back()
 t.expect(r"Select an option")
 t.send("0\r")
 check("0 returns to the dashboard, now healthy", t.expect(r"\[HEALTHY\]", 15))
@@ -95,6 +98,7 @@ t.send("continue\r")
 check("'continue' does not abort: it explains what to type", t.expect(r"type 'yes' to go ahead"))
 t.send("\r")
 check("Enter cancels: CANCELLED, nothing removed", t.expect(r"\[CANCELLED\]"))
+t.back()
 check("...the relay config is still there",
       os.path.exists(os.path.join(sb, "root", "usr/local/etc/xray-gemini/config.json")))
 t.expect(r"Select an option")
@@ -120,11 +124,26 @@ check("Enter = No: cancelled, nothing registered", t.expect(r"\[CANCELLED\]"))
 t.finish()
 kill_services(sb)
 
+# ============ a short terminal gets a COMPACT dashboard ===========================================
+t = Term(["bash", BUNDLE], env, rows=24)
+check("24-line terminal: passing checks collapse into one row", t.expect(r"Checks\s+\[OK\] \d+ of \d+ fine", 15))
+check("...instead of one row per probe", "[GUARDED]" not in t.all and "[LISTENING]" not in t.all)
+t.expect(r"Select an option"); t.send("0\r"); t.finish()
+t = Term(["bash", BUNDLE], env, rows=40)
+check("40-line terminal: the full card (a row per probe)", t.expect(r"\[GUARDED\]", 15))
+t.expect(r"Select an option"); t.send("0\r"); t.finish()
+
 # ============ not installed: items are greyed out with a reason ====================================
 sb, env = sandbox("empty")
 os.makedirs(os.path.join(sb, "root/etc/gemini-shecan"))
 open(os.path.join(sb, "root/etc/gemini-shecan/role"), "w").write("iran\n")
 t = menu(env)
+check("first run as root installs the tool and the 'gemini' command by itself", t.expect(r"Select an option", 20)
+      and os.path.islink(os.path.join(sb, "root/usr/local/bin/gemini"))
+      and os.access(os.path.join(sb, "root/usr/local/bin/gemini-menu"), os.X_OK))
+check("...the dashboard says so ('Last action' line)", "just type  gemini" in t.all)
+t.send("0\r"); t.finish()
+t = Term(["bash", BUNDLE], env)
 check("empty server: dashboard says the relay is missing", t.expect(r"\[PROBLEM\]", 15) and t.expect(r"MISSING"))
 check("...and Setup is item 1, enabled", "1) Setup / Reconfigure Relay" in t.all or t.expect(r"1\) Setup / Reconfigure Relay"))
 t.expect(r"Select an option")

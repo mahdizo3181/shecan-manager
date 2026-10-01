@@ -468,20 +468,6 @@ iran_act_repair() {  # iran_act_repair [all|firewall|config|timer|register]
   ui_ok "repair finished - press r to refresh the dashboard"
 }
 
-iran_act_install_self() {
-  iran_require_root
-  iran_step "Install this tool as $INSTALL_PATH"
-  iran_ensure_self
-  if iran_installed; then
-    # point the timer units at the freshly installed copy (repair timer also migrates the old layout)
-    iran_load_runtime
-    iran_write_timer_units
-    if ! is_dry; then must systemctl daemon-reload; fi
-  fi
-  iran_step_done
-  ui_ok "installed: type  gemini-menu  from now on"
-}
-
 # ================================================================== backups ===================
 bk_dirs() { ls -1d "$BACKUP_ROOT"/*/ 2>/dev/null | sed 's#/$##' | sort -r || true; }
 

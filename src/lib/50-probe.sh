@@ -81,6 +81,37 @@ probe_worst() {
   echo "$w"
 }
 
+# ui_box_probe_rows "Label:id" ...   the rows of a status card. On a tall terminal: one row per probe.
+# On a short one (< 34 lines, so the whole screen is not eaten by the card) the passing probes collapse
+# into ONE summary row, inactive / N-A probes are left out, and only the probes that need attention keep
+# their own row. GM_FULL_STATUS=1 forces the full card.
+ui_box_probe_rows() {
+  local spec label id n_ok=0 n=0 names="" summary
+  if ((UI_ROWS >= 34)) || [[ ${GM_FULL_STATUS:-0} == 1 ]]; then
+    for spec in "$@"; do ui_box_probe "${spec%%:*}" "${spec#*:}"; done
+    return 0
+  fi
+  for spec in "$@"; do
+    label=${spec%%:*}
+    id=${spec#*:}
+    case ${PROBE_LVL[$id]:-} in
+      off) ;;
+      ok)
+        n=$((n + 1)); n_ok=$((n_ok + 1))
+        names+="${names:+, }$label"
+        ;;
+      *)
+        n=$((n + 1))
+        ui_box_probe "$label" "$id"
+        ;;
+    esac
+  done
+  if ((n_ok > 0)); then
+    ui_badge summary ok "OK"
+    ui_box_kv "Checks" "$summary $n_ok of $n fine ${C_DIM}($names)${C_0}"
+  fi
+}
+
 # Full report with "what to do" lines (the Health check screen).
 probe_report() {
   local id badge

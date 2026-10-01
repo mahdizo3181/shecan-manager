@@ -128,14 +128,8 @@ iran_status() {
   esac
   ui_box_top "GEMINI $G_DOT SHECAN"
   ui_box_kv "Role" "${C_B}IRAN relay${C_0}  $badge"
-  ui_box_probe "Relay" service
-  ui_box_probe "Port" port
-  ui_box_probe "Firewall" firewall
-  ui_box_probe "Shecan DNS" dns
-  ui_box_probe "Registered" register
-  ui_box_probe "Timer" timer
-  ui_box_probe "Guard" guard
-  ui_box_probe "Access log" access
+  ui_box_probe_rows "Relay:service" "Port:port" "Firewall:firewall" "Shecan DNS:dns" "Registered:register" \
+    "Timer:timer" "Guard:guard" "Access log:access"
   ui_box_kv "Addresses" "${ip:-unknown} ${C_DIM}(this server)${C_0} $G_SEP ${fip:-?} ${C_DIM}(allowed foreign)${C_0}"
   ui_box_bottom
   worst=$(probe_worst)

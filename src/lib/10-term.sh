@@ -5,7 +5,7 @@
 # Wide (East-Asian / emoji) characters are NOT measured: keep user data out of boxes or pass it
 # through ui_safe first. The UI itself only uses narrow glyphs.
 
-UI_TTY=0 UI_COLOR=0 UI_UNICODE=0 UI_W=78
+UI_TTY=0 UI_COLOR=0 UI_UNICODE=0 UI_W=78 UI_ROWS=999
 
 ui_detect() {
   if [[ -t 1 ]]; then UI_TTY=1; else UI_TTY=0; fi
@@ -54,12 +54,23 @@ ui_glyphs() {
 # Outer width of every frame: the terminal width, clamped to 60..100 (re-read on each screen,
 # so a resized window is picked up).
 ui_width() {
-  local c=${GM_COLUMNS:-}
+  local c=${GM_COLUMNS:-} r=${GM_ROWS:-}
   if [[ -z $c ]] && ((UI_TTY)); then c=$(tput cols 2>/dev/null || true); fi
   [[ $c =~ ^[0-9]+$ ]] || c=80
   ((c < 60)) && c=60
   ((c > 100)) && c=100
   UI_W=$c
+  # terminal height: the status card gets compact on short windows (see ui_box_probe_rows)
+  if [[ -z $r ]] && ((UI_TTY)); then r=$(tput lines 2>/dev/null || true); fi
+  [[ $r =~ ^[0-9]+$ ]] || r=999
+  UI_ROWS=$r
+}
+
+# Clear the visible screen and home the cursor (menus are drawn from the top, like a TUI). Only on a
+# real terminal, so pipes, logs and tests never see escape codes. Scrollback is NOT erased (no \e[3J).
+ui_clear() {
+  if ((UI_TTY)); then printf '\e[H\e[2J'; fi
+  return 0
 }
 
 # ---- string helpers (results go into the variable named by the first argument) ----------------

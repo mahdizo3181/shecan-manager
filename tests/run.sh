@@ -207,6 +207,7 @@ has "footer on a sub-screen: 0) Back" "0) Back"
 hasnt "no [1] bracket style and no letter shortcuts in the footer" "[q]"
 hasnt "no 'Dry-run' key in the footer" "Dry-run"
 count "invalid input does not redraw the menu (3 draws: start, after the action, after 0/back)" "+- Root -" 3
+hasnt "no escape codes / clears when not on a terminal (pipes and logs stay clean)" $'\e'
 menu_run root >"$OUT" 2>&1 <<<$'12\n0'; has "a typo is not an instant trigger: '12' is just invalid" '"12" is not an option'
 menu_run root >"$OUT" 2>&1 <<<$'r\n0'; eq "r refreshes" 0 $?
 menu_run root >"$OUT" 2>&1 <<<$'s\n0'; has "'s' is not a shortcut for anything" '"s" is not an option'

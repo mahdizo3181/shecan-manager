@@ -5,7 +5,7 @@
 #   gemini-menu                          interactive menu (the role is remembered)
 #   gemini-menu [flags] iran <command>   canonical command line (see: gemini-menu iran help)
 #   gemini-menu role [iran|foreign]      show / set the remembered role
-#   gemini-menu install-self             install this file as /usr/local/bin/gemini-menu
+#   gemini-menu install                  install this file as /usr/local/bin/gemini-menu + the `gemini` command
 #
 # Both roles live in this engine: IRAN (the relay) and FOREIGN (the 3X-UI panel patcher).
 
@@ -25,7 +25,8 @@ gemini-menu $GM_VERSION - menu and commands for "Gemini via Iran-side Shecan"
   gemini-menu                         interactive menu
   gemini-menu [flags] iran|foreign <command>   run one command (gemini-menu iran help / foreign help)
   gemini-menu role [iran|foreign]     show / set which server this is (remembered in $ROLE_FILE)
-  gemini-menu install-self            install this file as $INSTALL_PATH
+  gemini-menu install                 install this file as $INSTALL_PATH and the command  gemini
+  curl -fsSL <url> | sudo bash -s -- install      the one-line install (then just type: gemini)
 
 Global flags: --role iran|foreign  --dry-run  --yes  --no-color  --ascii  --verbose  -h  --version
 Iran flags:   --foreign-ip IP  --ss-port N  --key-file F  --shecan-url-file F  --xray-version X.Y.Z
@@ -102,19 +103,32 @@ resolve_role() {
   esac
 }
 
-offer_install_self() {
+# First interactive run as root: install the tool and the 'gemini' command WITHOUT asking (a missing
+# installation is never what the person wants). A DIFFERENT installed version is only replaced after a
+# plain [y/N] question. Anything that cannot be done (not root, piped script) is skipped silently.
+auto_install_self() {
   local sum rc
-  if ((!IN_OK)) || is_dry || [[ $EUID -ne 0 || -z $GM_SELF || $GM_SELF == "$INSTALL_PATH" ]]; then return 0; fi
-  if [[ -x $INSTALL_PATH ]] && cmp -s "$GM_SELF" "$INSTALL_PATH"; then return 0; fi
+  if ((!IN_OK)) || is_dry || ! gm_is_root || [[ -z $GM_SELF ]]; then return 0; fi
+  if [[ $GM_SELF == "$(readlink -f "$INSTALL_PATH" 2>/dev/null)" ]]; then       # running the installed copy
+    if [[ ! -e $LINK_PATH && ! -L $LINK_PATH ]]; then gm_ensure_link >/dev/null; fi
+    return 0
+  fi
+  if [[ ! -x $INSTALL_PATH ]]; then
+    act_run "Install the 'gemini' command" gm_act_install
+    if ((ACT_RC == 0)) && [[ -L $LINK_PATH ]]; then MENU_LAST="${C_OK}[OK]${C_0} installed: from now on just type  gemini"; fi
+    return 0
+  fi
+  if cmp -s "$GM_SELF" "$INSTALL_PATH"; then
+    if [[ ! -e $LINK_PATH && ! -L $LINK_PATH ]]; then gm_ensure_link >/dev/null; fi
+    return 0
+  fi
   sum=$(md5sum "$GM_SELF" | cut -d' ' -f1)
   if [[ $(state_get install_declined) == "$sum" ]]; then return 0; fi
   ui_blank
-  if [[ -x $INSTALL_PATH ]]; then ui_info "A different version of this tool is installed as $INSTALL_PATH."
-  else ui_info "First run. This tool can install itself so you only type: gemini-menu (the health timer runs that copy)."; fi
-  confirm "Install / update $INSTALL_PATH now?"
-  rc=$?
+  ui_info "A different version of this tool is installed as $INSTALL_PATH."
+  confirm "Update it with this one?" && rc=0 || rc=$?
   if ((rc == 0)); then
-    act_run "Install $INSTALL_PATH" iran_act_install_self
+    act_run "Update $INSTALL_PATH" gm_act_install
   else
     state_set install_declined "$sum"
   fi
@@ -146,7 +160,7 @@ main() {
         iran | foreign) if is_dry; then echo "dry-run: would remember role ${POS[0]}"; else role_set "${POS[0]}"; echo "role remembered: ${POS[0]}"; fi; return 0 ;;
         *) ui_err "role: use iran | foreign | show"; return 2 ;;
       esac ;;
-    install-self) ROLE=iran; act_run "Install this tool" iran_act_install_self; return $? ;;
+    install | install-self) act_run "Install the 'gemini' command" gm_act_install; return $? ;;
   esac
 
   resolve_role || return $?
@@ -168,9 +182,8 @@ main() {
     ui_err "the menu needs a terminal - run a command instead (gemini-menu $ROLE help)"
     return 1
   fi
-  offer_install_self
+  auto_install_self
   gm_audit "menu opened"
-  ui_banner "GEMINI $G_DOT SHECAN" "$([[ $ROLE == foreign ]] && echo 'Foreign server manager' || echo 'Iran relay manager') $G_DOT v$GM_VERSION"
   menu_run main        # its own statement (never after || / if): see src/lib/40-action.sh
   rc=$?
   ui_blank

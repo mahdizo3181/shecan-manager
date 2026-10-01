@@ -122,7 +122,7 @@ iran_screens() {
   menu_item service 5 "Turn the watch timer OFF" "" "action:iran_act_timer off"
   menu_item service 6 "Telegram alerts: set or change" "" action:iran_act_tg_set
   menu_item service 7 "Telegram alerts: remove"        "" action:iran_act_tg_off
-  menu_item service 8 "Install / update this tool's copy" "the timer runs it" action:iran_act_install_self
+  menu_item service 8 "Install / update the gemini command" "the timer runs this copy" action:gm_act_install
 
   menu_screen logs "View Logs" iran_logs_card
   menu_item logs 1 "Last 50 lines: relay"        "" "view:iran_act_logs relay"

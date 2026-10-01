@@ -85,7 +85,7 @@ PY
 nbk() { ls -1d "$R"/root/gemini-shecan-backup/*/ 2>/dev/null | wc -l; }
 fenv() {
   echo PATH="$FIX:$PATH" GM_ROOT="$R" GM_FAKE="$SB/fake" GM_ASSUME_ROOT=1 GM_ASCII=1 GM_COLOR=0 NO_COLOR=1 GM_COLUMNS=100 \
-    XUI_FAKE_DB="$DBF" XUI_FAKE_DIR="$R/usr/local/x-ui/bin" GM_WAIT_XRAY=4 GM_XRAY_POLL=0.3 GM_STATUS_TTL=0 TMPDIR="$TMPBASE"
+    GM_FORCE_LINK=1 XUI_FAKE_DB="$DBF" XUI_FAKE_DIR="$R/usr/local/x-ui/bin" GM_WAIT_XRAY=4 GM_XRAY_POLL=0.3 GM_STATUS_TTL=0 TMPDIR="$TMPBASE"
 }
 # fgm args...: run the bundle (no terminal, no input); sets OUT / RC
 fgm() {
@@ -125,6 +125,7 @@ exists "backup holds the DB copy" "$BK/x-ui.db"; exists "...the original templat
 exists "...the template this run wrote (for the guarded rollback)" "$BK/template.new.json"; exists "...and the manifest" "$BK/foreign.manifest"
 eq "the backup template is the ORIGINAL" "$ORIG_SHA" "$(sha256sum <"$BK/template.orig.json" | cut -d' ' -f1)"
 eq "the generated panel config was reloaded with the new outbound" yes "$(grep -q '"ir-gemini"' "$R/usr/local/x-ui/bin/config.json" && echo yes || echo no)"
+eq "setup also installs the gemini command (link + file)" yes "$([[ -L $R/usr/local/bin/gemini && -x $R/usr/local/bin/gemini-menu ]] && echo yes || echo no)"
 eq "role remembered after setup" foreign "$(tr -d '[:space:]' <"$R/etc/gemini-shecan/role")"
 fsetup; eq "re-running setup exits 0" 0 "$RC"; has "...nothing to change" "nothing to change"; eq "...no new backup" 1 "$(nbk)"
 

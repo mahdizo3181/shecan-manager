@@ -112,13 +112,8 @@ foreign_status() {
   if [[ -x ${XRAY_BIN:-} ]]; then xv=$("$XRAY_BIN" version 2>/dev/null | awk 'NR==1{print $2}'); fi
   ui_box_top "GEMINI $G_DOT SHECAN"
   ui_box_kv "Role" "${C_B}FOREIGN server (3X-UI)${C_0}  $badge"
-  ui_box_probe "Panel" panel
-  ui_box_probe "Outbound" outbound
-  ui_box_probe "Iran relay" relay
-  ui_box_probe "Routing" routing
-  ui_box_probe "Sniffing" sniffing
-  ui_box_probe "Running cfg" generated
-  ui_box_probe "Last test" test
+  ui_box_probe_rows "Panel:panel" "Outbound:outbound" "Iran relay:relay" "Routing:routing" "Sniffing:sniffing" \
+    "Running cfg:generated" "Last test:test"
   ui_box_kv "Xray" "${xv:-unknown} ${C_DIM}(use the same version on the Iran server)${C_0}"
   ui_box_bottom
 }

@@ -45,9 +45,19 @@ time.sleep(0.6)
 t.send("\x03")
 check("Ctrl-C: action reports INTERRUPTED", t.expect(r"\[INTERRUPTED\]"))
 check("...deferred cleanup ran", "cleanup ran (deferred)" in t.all)
-check("...and we are back at the menu prompt (program did not exit)", t.expect(r"Select an option"))
+check("...the output stays until Enter ('Press Enter to return to the menu')", t.back())
+check("...then the menu is back and the program did not exit", t.expect(r"Select an option"))
+c0 = t.clears()
 t.send("7\r")
 check("failing action: rollback runs and result is FAILED", t.expect(r"rollback: step one undone") and t.expect(r"\[FAILED\]"))
+check("the action ran on a CLEARED screen", t.clears() == c0 + 1, str(t.clears() - c0))
+t.expect(r"Press Enter to return to the menu")
+t.buf = ""
+out = t.quiet(0.8)
+check("the menu is NOT redrawn while the result is still on screen", "╭─ Demo relay" not in out and t.clears() == c0 + 1)
+t.send("\r")
+check("Enter clears the screen and redraws the dashboard, with a 'Last action' line",
+      t.expect(r"Last action: \[FAILED\] Failing operation") and t.expect(r"╭─ Demo relay") and t.clears() == c0 + 2)
 t.expect(r"Select an option")
 
 # ---- 5. wizard: typos re-prompt, b cancels without killing anything -----------------------------
@@ -58,7 +68,9 @@ check("wizard: empty Enter re-prompts (no die)", t.expect(r"a value is required"
 t.send("not-an-ip\r")
 check("wizard: typo re-prompts", t.expect(r"not an IPv4 address"))
 t.send("b\r")
-check("wizard: b cancels -> CANCELLED, back at the menu", t.expect(r"\[CANCELLED\]") and t.expect(r"Select an option"))
+check("wizard: b cancels -> CANCELLED", t.expect(r"\[CANCELLED\]"))
+t.back()
+check("...and the menu is back", t.expect(r"Select an option"))
 
 # ---- 6. clean exit, terminal left sane ------------------------------------------------------------
 t.send("0\r")
@@ -94,7 +106,7 @@ t.send("2\r")
 ok = t.expect(r"Stop the relay\?")
 t.send("y\r")
 check("dry-run: action only describes", t.expect(r"would stop the relay") and t.expect(r"\[DRY-RUN\]"))
-t.send("0\r"); t.finish()
+t.back(); t.send("0\r"); t.send("0\r"); t.finish()
 
 failed = results.count(False)
 print(f"\n{len(results) - failed} passed, {failed} failed (pty)")

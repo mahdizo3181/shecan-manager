@@ -41,7 +41,7 @@ new_sandbox() {
 }
 # gm [args...]  -> runs the bundle in the sandbox; sets OUT and RC
 gm() {
-  OUT=$(PATH=$FIX:$PATH GM_ROOT=$R GM_FAKE=$SB/fake GM_ASSUME_ROOT=1 GM_ASCII=1 GM_COLOR=0 NO_COLOR=1 GM_INPUT= \
+  OUT=$(PATH=$FIX:${EXTRA_PATH:+$EXTRA_PATH:}$PATH GM_ROOT=$R GM_FAKE=$SB/fake GM_ASSUME_ROOT=1 GM_ASCII=1 GM_COLOR=0 NO_COLOR=1 GM_INPUT= GM_FORCE_LINK=${FORCE_LINK-1} \
     GM_DNS_RETRY_SLEEP=0 GM_POLL_SLEEP=0.2 GM_WATCH_SLEEP=0 GM_STATUS_TTL=0 GM_COLUMNS=100 TMPDIR=$TMPBASE \
     SHECAN_REGISTER_URL=${URL-https://shecan.invalid/register?token=SECRET123} \
     bash "$BUNDLE" "$@" 2>&1 </dev/null)
@@ -50,7 +50,7 @@ gm() {
 # gmi "typed input" args...  (answers prompts through stdin)
 gmi() {
   local input=$1; shift
-  OUT=$(PATH=$FIX:$PATH GM_ROOT=$R GM_FAKE=$SB/fake GM_ASSUME_ROOT=1 GM_ASCII=1 GM_COLOR=0 NO_COLOR=1 GM_INPUT=stdin \
+  OUT=$(PATH=$FIX:$PATH GM_ROOT=$R GM_FAKE=$SB/fake GM_ASSUME_ROOT=1 GM_ASCII=1 GM_COLOR=0 NO_COLOR=1 GM_INPUT=stdin GM_FORCE_LINK=${FORCE_LINK-1} \
     GM_DNS_RETRY_SLEEP=0 GM_POLL_SLEEP=0.2 GM_WATCH_SLEEP=0 GM_STATUS_TTL=0 GM_COLUMNS=100 TMPDIR=$TMPBASE \
     bash "$BUNDLE" "$@" 2>&1 <<<"$input")
   RC=$?
@@ -228,6 +228,47 @@ has "SECURITY message" "OPEN PROXY"
 hasnt "nothing is left listed as kept" "[PARTIAL]"
 absent "the whole run was undone (config)" "$R/usr/local/etc/xray-gemini/config.json"
 eq "relay stopped" 0 "$(ls "$SB"/fake/svc/*.pid 2>/dev/null | wc -l)"
+
+# ============================================================================ the global `gemini` command
+new_sandbox
+gm install
+eq "install exits 0" 0 "$RC"
+exists "the tool is installed as gemini-menu" "$R/usr/local/bin/gemini-menu"
+eq "...executable" yes "$([[ -x $R/usr/local/bin/gemini-menu ]] && echo yes || echo no)"
+eq "'gemini' is a symlink to it" "$R/usr/local/bin/gemini-menu" "$(readlink -f "$R/usr/local/bin/gemini")"
+has "...and the result says how to use it" "just type:  gemini"
+OUT=$(PATH=$FIX:$PATH GM_ROOT=$R GM_FAKE=$SB/fake "$R/usr/local/bin/gemini" --version 2>&1); has "running the link works from anywhere" "gemini-menu 0."
+gm install; eq "install is idempotent" 0 "$RC"; has "...file up to date" "is up to date"; has "...link ready" "the command 'gemini' is ready"
+gm install --dry-run; has "install --dry-run only describes" "would install this tool"
+new_sandbox; mkdir -p "$R/usr/local/bin"; printf '#!/bin/sh\necho somebody-elses-gemini-cli\n' >"$R/usr/local/bin/gemini"; chmod +x "$R/usr/local/bin/gemini"
+gm install
+eq "a 'gemini' that is not ours: install still succeeds" 0 "$RC"
+eq "...and is NEVER overwritten" "somebody-elses-gemini-cli" "$("$R/usr/local/bin/gemini")"
+has "...with an explanation" "is not this tool"; exists "...gemini-menu still works" "$R/usr/local/bin/gemini-menu"
+new_sandbox; mkdir -p "$SB/otherbin"; printf '#!/bin/sh\necho other\n' >"$SB/otherbin/gemini"; chmod +x "$SB/otherbin/gemini"
+FORCE_LINK=0 EXTRA_PATH=$SB/otherbin gm install
+has "another 'gemini' elsewhere on the PATH is not shadowed" "not shadowing it"
+eq "...no link was created" no "$([[ -e $R/usr/local/bin/gemini ]] && echo yes || echo no)"
+FORCE_LINK=1 EXTRA_PATH=$SB/otherbin gm install; eq "...GM_FORCE_LINK=1 overrides it" yes "$([[ -L $R/usr/local/bin/gemini ]] && echo yes || echo no)"
+# the one-line install: the script arrives on stdin
+new_sandbox
+OUT=$(cat "$BUNDLE" | env PATH="$FIX:$PATH" GM_ROOT="$R" GM_FAKE="$SB/fake" GM_ASSUME_ROOT=1 GM_ASCII=1 GM_COLOR=0 NO_COLOR=1 GM_INPUT= GM_FORCE_LINK=1 TMPDIR="$TMPBASE" GM_INSTALL_URL="file://$BUNDLE" bash -s -- install 2>&1); RC=$?
+eq "curl | bash -s -- install: exits 0" 0 "$RC"; has "...it fetched its own copy (a piped script has no file)" "piped into bash"
+eq "...and installed gemini-menu + the gemini link" yes "$([[ -x $R/usr/local/bin/gemini-menu && -L $R/usr/local/bin/gemini ]] && echo yes || echo no)"
+eq "...the installed copy is the real tool" "$(sha256sum <"$BUNDLE" | cut -d' ' -f1)" "$(sha256sum <"$R/usr/local/bin/gemini-menu" | cut -d' ' -f1)"
+new_sandbox; printf 'not a script at all\n' >"$SB/junk"
+OUT=$(cat "$BUNDLE" | env PATH="$FIX:$PATH" GM_ROOT="$R" GM_FAKE="$SB/fake" GM_ASSUME_ROOT=1 GM_ASCII=1 GM_COLOR=0 NO_COLOR=1 GM_INPUT= TMPDIR="$TMPBASE" GM_INSTALL_URL="file://$SB/junk" bash -s -- install 2>&1); RC=$?
+if ((RC != 0)); then ok; else bad "a downloaded file that is not our script must be refused"; fi
+has "...says so" "not a valid gemini-menu script"; eq "...and installs nothing" no "$([[ -e $R/usr/local/bin/gemini-menu ]] && echo yes || echo no)"
+if ((EUID != 0)); then
+  new_sandbox
+  OUT=$(PATH="$FIX:$PATH" GM_ROOT="$R" GM_FAKE="$SB/fake" GM_ASCII=1 GM_COLOR=0 NO_COLOR=1 GM_INPUT= bash "$BUNDLE" install 2>&1 </dev/null); RC=$?
+  eq "install as a normal user is refused" 1 "$RC"; has "...and says to use sudo" "run as root (for example with sudo)"
+fi
+new_sandbox; do_setup
+eq "setup also installs the 'gemini' command" yes "$([[ -L $R/usr/local/bin/gemini ]] && echo yes || echo no)"
+gm --role iran uninstall --yes
+eq "uninstall keeps the tool and the 'gemini' command" yes "$([[ -x $R/usr/local/bin/gemini-menu && -L $R/usr/local/bin/gemini ]] && echo yes || echo no)"
 
 # ============================================================================ the Shecan URL is asked for VISIBLY
 new_sandbox

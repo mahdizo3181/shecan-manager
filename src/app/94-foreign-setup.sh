@@ -79,7 +79,9 @@ foreign_act_setup() {
 
   foreign_commit "$GM_TMP/template.$ok.json"
   if ! is_dry; then role_set foreign; fi
+  act_step "Install the 'gemini' command"
+  gm_install_all || ui_warn "could not install the 'gemini' command (the setup itself succeeded): run  gemini-menu install  later"
   ui_blank
-  ui_say "Next: gemini-menu foreign test      (checks foreign -> Iran -> Shecan -> Google)"
+  ui_say "Next: gemini foreign test      (checks foreign -> Iran -> Shecan -> Google)"
   ui_say "Undo: gemini-menu foreign rollback"
 }

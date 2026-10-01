@@ -114,7 +114,7 @@ role_set() {
 # ---- privileges and tools ----------------------------------------------------------------------------
 iran_require_root() {
   if is_dry || [[ $EUID -eq 0 || ${GM_ASSUME_ROOT:-0} == 1 ]]; then return 0; fi
-  act_fail "run as root (or use --dry-run)"
+  act_fail "run as root (for example with sudo), or use --dry-run"
 }
 
 pkg_of() {

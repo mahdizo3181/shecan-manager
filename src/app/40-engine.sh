@@ -263,19 +263,10 @@ WantedBy=timers.target
 EOF
 }
 
-# Make sure the file at $INSTALL_PATH is this very script.
+# Make sure the file at $INSTALL_PATH is this very script (and the 'gemini' link exists). The health
+# timer runs that file. A script piped into bash re-downloads itself (see 12-install.sh).
 iran_ensure_self() {
-  if is_dry; then
-    if [[ ! -x $INSTALL_PATH ]]; then dry_say "would install this tool as $INSTALL_PATH (the health timer runs it)"; fi
-    return 0
-  fi
-  [[ -n $GM_SELF && -r $GM_SELF ]] \
-    || act_fail "cannot find this script on disk to install it as $INSTALL_PATH (it was piped into bash). Download it to a file and run it from there."
-  if [[ $GM_SELF == "$INSTALL_PATH" ]]; then return 0; fi
-  if [[ -x $INSTALL_PATH ]] && cmp -s "$GM_SELF" "$INSTALL_PATH"; then return 0; fi
-  mkdir_tracked "$(dirname "$INSTALL_PATH")" 755
-  put_file "$INSTALL_PATH" 755 root:root <"$GM_SELF"
-  ui_ok "installed $INSTALL_PATH (the timer and 'gemini-menu' both run this copy)"
+  gm_install_all || act_fail "cannot install this tool as $INSTALL_PATH (the health timer runs it). Download it to a file and run it from there."
 }
 
 tg_post() {  # tg_post TEXT   (TG_BOT / TG_CHAT from the environment) -> 0 if Telegram accepted it
