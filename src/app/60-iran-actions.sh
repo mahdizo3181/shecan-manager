@@ -19,7 +19,7 @@ iran_act_health() {
   case $(probe_worst) in
     ok)   ui_ok "Everything is fine." ;;
     warn) ui_warn "Works, but something needs attention (see the lines above)." ;;
-    *)    ui_err "Something is broken (see what to do above). 'Repair > Fix everything' handles the common cases." ;;
+    *)    ui_err "Something is broken (see what to do above). Health Check & Status > 'Fix everything that is wrong' handles the common cases." ;;
   esac
 }
 
@@ -33,7 +33,7 @@ iran_cli_status() {
 # ================================================================== registration ==============
 iran_ask_shecan_url() {
   local u
-  prompt_secret u "Paste the Shecan registration URL" v_url || act_cancel
+  prompt_valid u "Shecan registration URL (paste it here)" "" v_url || act_cancel
   mkdir_tracked "$STATE_DIR" 700
   put_file "$URL_FILE" 600 root:root < <(printf '%s\n' "$u")
 }
@@ -63,13 +63,13 @@ iran_act_register() {
   iran_need_installed
   if [[ ! -r $URL_FILE ]]; then
     ui_note "No registration URL is stored yet."
-    if is_dry; then dry_say "would ask for the Shecan URL (hidden) and store it in $URL_FILE (mode 600)"; else iran_ask_shecan_url; fi
+    if is_dry; then dry_say "would ask for the Shecan URL and store it in $URL_FILE (mode 600)"; else iran_ask_shecan_url; fi
   fi
   if is_dry; then
     dry_say "would call the registration URL (never shown) with curl -4, then compare Shecan DNS with a neutral resolver"
     return 0
   fi
-  confirm "Register this server's IP with Shecan now?" y || act_cancel
+  confirm "Register this server's IP with Shecan now?" || act_cancel
   iran_register_call
   iran_verify_loop
 }
@@ -105,7 +105,7 @@ iran_act_info() {
     ui_warn "the key file is missing: the foreign server needs a file to read the key from"
     if is_dry; then
       dry_say "would save the key to $keyf (mode 600)"
-    elif confirm "Create $keyf from the installed config?" y; then
+    elif confirm "Create $keyf from the installed config?"; then
       mkdir_tracked "$(dirname "$keyf")" 700
       put_file "$keyf" 600 root:root < <(printf '%s\n' "$SS_KEY_VAL")
     fi
@@ -119,7 +119,8 @@ iran_act_info() {
 iran_act_reveal_key() {
   iran_need_installed
   iran_load_key
-  confirm_typed_force "The full key is printed ONCE on this screen. Anyone looking at it can read it." yes || act_cancel
+  ui_warn "The full key is printed ONCE on this screen. Anyone looking at it can read it."
+  confirm_force "Show the key now?" || act_cancel
   printf '\n  KEY: %s\n  (not logged) press Enter to wipe it from the screen... ' "$SS_KEY_VAL"
   in_read _ "" || true
   if ((UI_TTY)); then printf '\e[3A\e[J'; fi
@@ -144,7 +145,7 @@ iran_act_change_ip() {
   else
     ui_say "Firewall ($FW_KIND): allow $SS_PORT/tcp from $new   (instead of ${old:-nobody})"
     ui_note "Only the firewall rule changes; the relay config and the tunnel are untouched."
-    if ! is_dry; then confirm "Apply?" y || act_cancel; fi
+    if ! is_dry; then confirm "Apply?" || act_cancel; fi
   fi
   if is_dry; then
     dry_say "would ensure the rule for $new${old:+, remove the rule for $old}, update $WATCH_CONF"
@@ -200,7 +201,7 @@ iran_domains_apply() {
   GEMINI_DOMAINS=("${new[@]}")
   gen_validate_config
   if is_dry; then dry_say "would write $CONF and restart $SVC"; return 0; fi
-  confirm "Apply and restart $SVC (Gemini sessions reconnect in a second)?" y || act_cancel
+  confirm "Apply and restart $SVC (Gemini sessions reconnect in a second)?" || act_cancel
   iran_step "Domain list (${#new[@]} hosts)"
   put_file "$CONF" 640 "root:$SVC" <"$GM_TMP/config.json"
   if ((CHANGED)); then iran_restart_wait || act_fail "$SVC did not come back on port $SS_PORT"; fi
@@ -289,7 +290,7 @@ iran_act_access_on() {  # iran_act_access_on [minutes]
   ui_say "Turns the relay's access log ON for $m minute(s): every Gemini connection is logged to the journal."
   ui_note "It switches itself off afterwards (systemd timer), even if you close this session."
   if is_dry; then dry_say "would restart $SVC with access logging and schedule the automatic revert"; return 0; fi
-  confirm "Continue? ($SVC restarts briefly)" y || act_cancel
+  confirm "Continue? ($SVC restarts briefly)" || act_cancel
   iran_step "Access log on for $m min"
   put_file "$CONF" 640 "root:$SVC" <"$GM_TMP/config.json"
   if ((CHANGED)); then iran_restart_wait || act_fail "$SVC did not come back"; fi
@@ -297,7 +298,7 @@ iran_act_access_on() {  # iran_act_access_on [minutes]
   must systemd-run --on-active="${m}m" --unit="$REVERT_UNIT" --collect "$self" --role iran --yes access-off >/dev/null
   state_set access_until "$(($(now) + m * 60))"
   iran_step_done
-  ui_ok "access log is ON until $(date -d "+$m min" +%H:%M) - read it with: Logs > live tail"
+  ui_ok "access log is ON until $(date -d "+$m min" +%H:%M) - read it with: View Logs > Live tail"
 }
 
 iran_act_access_off() {
@@ -323,7 +324,7 @@ iran_act_service() {  # iran_act_service start|stop|restart   (anything else is 
   iran_need_installed
   ui_say "About to $a $SVC (Gemini requests through the relay pause while it is down)."
   if is_dry; then dry_say "would run: systemctl $a $SVC"; return 0; fi
-  confirm "$a $SVC?" y || act_cancel
+  confirm "$a $SVC?" || act_cancel
   if [[ $a == restart ]]; then
     iran_restart_wait || act_fail "$SVC did not come back"
   else
@@ -348,12 +349,12 @@ iran_act_timer() {  # iran_act_timer on|off   (anything else is refused - '' use
 iran_act_tg_set() {
   local bot=${TG_BOT:-} chat=${TG_CHAT:-}
   iran_need_installed
-  if [[ -z $bot ]]; then prompt_secret bot "Telegram bot token" v_tg_token || act_cancel; fi
+  if [[ -z $bot ]]; then prompt_valid bot "Telegram bot token" "" v_tg_token || act_cancel; fi
   if [[ -z $chat ]]; then prompt_valid chat "Telegram chat id" "" v_tg_chat || act_cancel; fi
   ui_say "Alerts go out only when the health timer finds a problem (and when it recovers)."
   ui_say "Token to be stored: $(mask_key "$bot")"
   if is_dry; then dry_say "would store the token in $WATCH_ENV (mode 600)"; return 0; fi
-  confirm "Save these alert settings?" y || act_cancel
+  confirm "Save these alert settings?" || act_cancel
   iran_step "Telegram alert settings"
   put_file "$WATCH_ENV" 600 root:root < <(printf 'TG_BOT=%q\nTG_CHAT=%q\n' "$bot" "$chat")
   iran_step_done
@@ -368,7 +369,7 @@ iran_act_tg_off() {
   iran_need_installed
   if [[ ! -f $WATCH_ENV ]]; then ui_ok "no alert settings are stored"; return 0; fi
   if is_dry; then dry_say "would remove $WATCH_ENV"; return 0; fi
-  confirm "Remove the Telegram alert settings?" n || act_cancel
+  confirm "Remove the Telegram alert settings?" || act_cancel
   iran_step "Remove Telegram alerts"
   backup_file "$WATCH_ENV"
   rm -f "$WATCH_ENV"
@@ -511,7 +512,7 @@ iran_act_backup_restore() {  # DIR - put that backup's config.json back
   xray_test_bin "$BIN" "$f" || act_fail "that config is rejected by the installed Xray: $(tail -n 2 "$GM_TMP/xtest.out" | tr '\n' ' ')"
   iran_act_backup_diff "$1"
   if is_dry; then dry_say "would restore $f as $CONF and restart $SVC"; return 0; fi
-  confirm "Restore this config and restart $SVC?" n || act_cancel
+  confirm "Restore this config and restart $SVC?" || act_cancel
   iran_step "Restore config from $(basename "$1")"
   put_file "$CONF" 640 "root:$SVC" <"$f"
   if ((CHANGED)); then iran_restart_wait || act_fail "$SVC did not come back"; fi
@@ -530,7 +531,7 @@ iran_act_rollback() {  # iran_act_rollback [DIR]  - undo a whole run (default: t
   ui_say "rolling back run $(basename "$d"):"
   awk -F'\t' '{printf "     %s %s\n", $1, $2}' "$d/$MANIFEST"
   if is_dry; then dry_say "would undo the entries above (last to first)"; return 0; fi
-  confirm "Undo these changes? This stops $SVC and removes the firewall rule it added." n || act_cancel
+  confirm "Undo these changes? This stops $SVC and removes the firewall rule it added." || act_cancel
   BK=$d
   replay_manifest 0
   mv -f "$d/$MANIFEST" "$d/$MANIFEST.rolledback"
@@ -540,7 +541,10 @@ iran_act_rollback() {  # iran_act_rollback [DIR]  - undo a whole run (default: t
 # ================================================================== uninstall =================
 iran_act_uninstall() {
   iran_require_root
-  if ! iran_installed && [[ ! -d $STATE_DIR ]]; then ui_ok "nothing to remove: the relay is not installed"; return 0; fi
+  if ! iran_installed && [[ ! -e $WATCH_CONF && ! -e $URL_FILE && ! -e $BIN ]]; then
+    ui_ok "nothing to remove: the relay is not installed"
+    return 0
+  fi
   iran_load_runtime
   ui_say "This removes ONLY what this tool created:"
   ui_say "  services : $SVC, $WATCH_SVC timer + service (stopped and disabled)"
@@ -549,9 +553,9 @@ iran_act_uninstall() {
   ui_say "  user     : system user $SVC"
   ui_say "It keeps: the SS key file, the backup folder, this tool ($INSTALL_PATH) and the log file."
   ui_say "It never touches the tunnel, other firewall rules, or any other xray / x-ui."
-  ui_warn "Gemini through the foreign server stops working until you run the foreign Revert (or set up again)."
+  ui_note "Gemini through the foreign server stops working until you run the foreign Revert (or set up again)."
   if is_dry; then dry_say "would remove everything listed above"; return 0; fi
-  confirm_typed "Uninstall the Iran relay now?" yes || act_cancel
+  confirm_typed "This permanently deletes the relay, its config, the stored Shecan URL and the timer." yes || act_cancel
   iran_step "Uninstall"
   backup_file "$CONF"
   backup_file "$WATCH_CONF"

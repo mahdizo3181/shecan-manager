@@ -195,7 +195,7 @@ absent "uninstall: Shecan URL removed" "$R/etc/gemini-shecan/shecan-url"
 exists "uninstall: SS key file kept" "$R/root/gemini-shecan/ss.key"
 exists "uninstall: the tool itself kept" "$R/usr/local/bin/gemini-menu"
 eq "uninstall: firewall rule removed" 0 "$(grep -c . "$SB/fake/iptables.rules")"
-gm --role iran status; eq "after uninstall status is broken (exit 2)" 2 "$RC"; has "...says how to fix it" "Run the setup"
+gm --role iran status; eq "after uninstall status is broken (exit 2)" 2 "$RC"; has "...says how to fix it" "Setup / Reconfigure Relay"
 
 # ============================================================================ Finding 8: honest partial failure
 new_sandbox
@@ -228,6 +228,14 @@ has "SECURITY message" "OPEN PROXY"
 hasnt "nothing is left listed as kept" "[PARTIAL]"
 absent "the whole run was undone (config)" "$R/usr/local/etc/xray-gemini/config.json"
 eq "relay stopped" 0 "$(ls "$SB"/fake/svc/*.pid 2>/dev/null | wc -l)"
+
+# ============================================================================ the Shecan URL is asked for VISIBLY
+new_sandbox
+URL= gmi $'https://shecan.invalid/typed?token=VISIBLE\n' --role iran setup --foreign-ip "$FOREIGN" --ss-port "$PORT" --xray-bin "$FIX/xray" --yes
+eq "setup asks for the Shecan URL when none is given, and accepts it typed" 0 "$RC"
+has "...as a plain 'Label: ' prompt" "Shecan registration URL (paste it here): "
+eq "...and stored it (mode 600)" "https://shecan.invalid/typed?token=VISIBLE|600" "$(tr -d '[:space:]' <"$R/etc/gemini-shecan/shecan-url")|$(stat -c %a "$R/etc/gemini-shecan/shecan-url")"
+hasnt "...the URL is not echoed back by the tool" "token=VISIBLE"
 
 # ============================================================================ validation without a terminal
 new_sandbox

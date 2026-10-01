@@ -66,7 +66,7 @@ iran_setup_inputs() {
     ui_warn "no Shecan registration URL given (a real run needs SHECAN_REGISTER_URL, --shecan-url-file, or it asks)"
     SHECAN_URL_SRC=stored
   elif ((IN_OK)); then
-    prompt_secret NEW_URL "Shecan registration URL" v_url || act_cancel
+    prompt_valid NEW_URL "Shecan registration URL (paste it here)" "" v_url || act_cancel
     SHECAN_URL_SRC=ask
   else
     act_fail "the Shecan registration URL is missing: set SHECAN_REGISTER_URL or pass --shecan-url-file"
@@ -360,7 +360,7 @@ iran_act_setup() {
   ui_box_kv "Timer" "runs $INSTALL_PATH every 5 min"
   ui_box_bottom
   ui_note "Nothing on this server's tunnel or its existing firewall rules is modified."
-  if ! is_dry; then confirm "Proceed?" y || act_cancel; fi
+  if ! is_dry; then confirm "Proceed?" || act_cancel; fi
 
   XRAY_CHECK_BIN=""
   iran_step_key

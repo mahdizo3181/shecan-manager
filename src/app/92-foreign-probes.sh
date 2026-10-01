@@ -27,7 +27,7 @@ pr_f_outbound() {
   if [[ $T_HAS == 1 ]]; then
     printf 'ok\tPRESENT\toutbound %s -> %s:%s (%s form)\n' "$TAG" "$T_IP" "$T_PORT" "$T_FORM"
   else
-    printf 'fail\tMISSING\toutbound %s is not in the template\tSetup: press s (or: gemini-menu foreign setup)\n' "$TAG"
+    printf 'fail\tMISSING\toutbound %s is not in the template\tChoose 1 (Setup / Patch Panel Template), or: gemini-menu foreign setup\n' "$TAG"
   fi
 }
 
@@ -45,15 +45,15 @@ pr_f_routing() {
   case $T_STATE in
     on)
       if [[ $T_UDP != 1 ]]; then
-        printf 'warn\tNO QUIC BLOCK\trouting is ON but the udp/443 (QUIC) block rule is missing\tSetup re-creates both rules: press s.\n'
+        printf 'warn\tNO QUIC BLOCK\trouting is ON but the udp/443 (QUIC) block rule is missing\tSetup re-creates both rules: choose 1, or: gemini-menu foreign setup.\n'
       elif [[ $T_SCOPE == all ]]; then
         printf 'ok\tON\tall inbounds, %s hosts\n' "$T_NDOM"
       else
         printf 'ok\tON\t%s hosts for: %s\n' "$T_NDOM" "${T_SCOPE//,/ }"
       fi ;;
-    off)     printf 'warn\tOFF\trules kept but they match nothing (Gemini goes out the normal way)\tRouting > Switch ON\n' ;;
-    partial) printf 'warn\tINCONSISTENT\tthe two Gemini rules disagree (one on, one off/missing)\tRouting > Switch ON makes them consistent.\n' ;;
-    *)       printf 'fail\tMISSING\tthe Gemini routing rules are not in the template\tSetup: press s.\n' ;;
+    off)     printf 'warn\tOFF\trules kept but they match nothing (Gemini goes out the normal way)\tGemini Routing ON / OFF > Switch routing ON\n' ;;
+    partial) printf 'warn\tINCONSISTENT\tthe two Gemini rules disagree (one on, one off/missing)\tGemini Routing ON / OFF > Switch routing ON makes them consistent.\n' ;;
+    *)       printf 'fail\tMISSING\tthe Gemini routing rules are not in the template\tChoose 1 (Setup / Patch Panel Template).\n' ;;
   esac
 }
 
@@ -62,7 +62,7 @@ pr_f_sniffing() {
   local n
   n=$(panel_py list "$DB" 2>/dev/null | grep -c . || true)
   if ((n > 0)); then
-    printf 'warn\t%s BAD\t%s inbound(s) with bad sniffing: domain rules can miss\tSniffing > Fix selected inbounds\n' "$n" "$n"
+    printf 'warn\t%s BAD\t%s inbound(s) with bad sniffing: domain rules can miss\tInbounds: Scope & Sniffing > Fix sniffing on selected inbounds\n' "$n" "$n"
   else
     printf 'ok\tOK\tevery enabled inbound sniffs tls+http\n'
   fi
@@ -73,7 +73,7 @@ pr_f_generated() {
   if grep -q "\"$TAG\"" "$XRAY_DIR/config.json"; then
     printf 'ok\tLOADED\tthe running Xray config contains %s\n' "$TAG"
   else
-    printf 'warn\tNOT LOADED\tthe running Xray config does not contain %s yet\tThe panel needs a restart to load the template (Routing ON/OFF does that).\n' "$TAG"
+    printf 'warn\tNOT LOADED\tthe running Xray config does not contain %s yet\tThe panel needs a restart to load the template (Gemini Routing ON / OFF does that).\n' "$TAG"
   fi
 }
 
@@ -82,12 +82,12 @@ pr_f_test() {
   t=$(state_get last_test_ts)
   res=$(state_get last_test_res)
   if [[ ! $t =~ ^[0-9]+$ ]]; then
-    printf 'warn\tNEVER\tno end-to-end test has run yet\tEnd-to-end test: press 2.\n'
+    printf 'warn\tNEVER\tno end-to-end test has run yet\tEnd-to-End Test (3), or: gemini-menu foreign test.\n'
     return 0
   fi
   age=$(fmt_age $(($(now) - t)))
   if [[ $res == OK* ]]; then printf 'ok\tPASSED\t%s, %s\n' "$res" "$age"
-  else printf 'fail\tFAILED\t%s, %s\tEnd-to-end test (2) shows which hop is broken.\n' "$res" "$age"; fi
+  else printf 'fail\tFAILED\t%s, %s\tEnd-to-End Test (3) shows which hop is broken.\n' "$res" "$age"; fi
 }
 
 foreign_register_probes() {

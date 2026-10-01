@@ -5,6 +5,9 @@
 #     0  value accepted
 #     1  (confirm only) the answer was "no"
 #    10  cancelled: the user typed b / back / cancel, pressed Ctrl-D, or there is no terminal
+#
+# Everything the user types is VISIBLE and editable (readline: backspace, arrows, paste). There is no
+# hidden input in this tool: nothing it asks for is a password.
 # An invalid value never ends a prompt: it prints one inline error line and asks again.
 # Inside an action a cancelled prompt is handled with:   prompt_ipv4 ip "Foreign IP" || act_cancel
 #
@@ -25,12 +28,12 @@ in_init() {
   fi
 }
 
-# "Label [default] ❯ " (colour escapes wrapped for readline)
+# "Label [default]: " (colour escapes wrapped for readline)
 in_prompt() {  # in_prompt OUT "label" ["default"]
   local -n __o_ip=$1
   local __p="  ${R_TITLE}$2${R_0}"
   if [[ -n ${3:-} ]]; then __p+=" ${R_DIM}[$3]${R_0}"; fi
-  __o_ip="$__p ${R_TITLE}${G_PROMPT}${R_0} "
+  __o_ip="$__p: "
 }
 
 # One-time reminder per action / per menu, so the prompts themselves stay short.
@@ -69,32 +72,6 @@ in_read() {
   __l=${__l##+([[:space:]])}
   __l=${__l%%+([[:space:]])}
   __o_ir=$__l
-  return 0
-}
-
-in_read_secret() {  # same contract as in_read, but nothing is echoed
-  local -n __o_irs=$1
-  local __p=$2 __l="" __rc=0
-  IN_EOF=0
-  __o_irs=""
-  if ((!IN_OK)); then IN_EOF=1; return 1; fi
-  GM_INT=0
-  if ((IN_TTY)); then
-    GM_READING=1
-    IFS= read -rs -u "$IN_FD" -p "$__p" __l || __rc=$?
-    GM_READING=0
-  else
-    __p=${__p//[$'\001\002']/}
-    printf '%s' "$__p"
-    IFS= read -r -u "$IN_FD" __l || __rc=$?
-  fi
-  printf '\n'
-  if ((__rc != 0)); then
-    if ((__rc > 128 || GM_INT)); then return 130; fi
-    IN_EOF=1
-    return 1
-  fi
-  __o_irs=$__l
   return 0
 }
 
@@ -248,77 +225,56 @@ prompt_choice() {  # prompt_choice OUT "Label" "default" option...
   prompt_valid "$__pc_out" "$__pc_label" "$__pc_def" v_choice "$@"
 }
 
-prompt_secret() {  # prompt_secret OUT "Label" [validator args...]   hidden input, empty/invalid is re-asked
-  local -n __o_ps=$1
-  local __ps_label=$2 __ps_fn=${3:-} __ps_l __ps_p __ps_rc
-  shift 2
-  shift || true
-  in_hint_once
-  while :; do
-    in_prompt __ps_p "$__ps_label ${R_DIM}(hidden)${R_0}" ""
-    in_read_secret __ps_l "$__ps_p" && __ps_rc=0 || __ps_rc=$?
-    if ((__ps_rc != 0)); then return 10; fi
-    case ${__ps_l,,} in b | back | cancel) return 10 ;; esac
-    if [[ -z $__ps_l ]]; then
-      ui_err "nothing was entered (type b to cancel)"
-    elif [[ -z $__ps_fn ]]; then
-      __o_ps=$__ps_l
-      return 0
-    else
-      IN_VALUE=$__ps_l IN_ERR=""
-      if "$__ps_fn" "$__ps_l" "$@"; then
-        __o_ps=$IN_VALUE
-        return 0
-      fi
-      ui_err "${IN_ERR:-invalid input}"
-    fi
-  done
-}
-
-# confirm "Question" [y|n]  -> 0 yes, 1 no, 10 cancelled.   --yes (GM_YES=1) answers yes.
+# confirm "Question"  ->  "Question [y/N]: "   0 yes | 1 no | 10 cancelled
+#   y, Y, yes, YES = yes.  n, no, or just Enter = NO (the safe default).  Anything else is not guessed at:
+#   it asks again, so a stray word never answers for you.  --yes (GM_YES=1) answers yes.
 confirm() {
-  local __c_q=$1 __c_def=${2:-} __c_hint __c_l __c_p __c_rc
+  local __c_q=$1 __c_l __c_p __c_rc
   if [[ $GM_YES == 1 ]]; then
     ui_note "auto-confirmed (--yes): $__c_q"
     return 0
   fi
-  case $__c_def in y) __c_hint="Y/n" ;; n) __c_hint="y/N" ;; *) __c_hint="y/n" ;; esac
   while :; do
-    in_prompt __c_p "$__c_q ${R_DIM}[$__c_hint]${R_0}" ""
+    in_prompt __c_p "$__c_q ${R_DIM}[y/N]${R_0}" ""
     in_read __c_l "$__c_p" && __c_rc=0 || __c_rc=$?
     if ((__c_rc != 0)); then return 10; fi
     case ${__c_l,,} in
       y | yes) return 0 ;;
-      n | no) return 1 ;;
+      "" | n | no) return 1 ;;
       b | back | cancel) return 10 ;;
-      "")
-        if [[ $__c_def == y ]]; then return 0; fi
-        if [[ $__c_def == n ]]; then return 1; fi
-        ui_err "please answer yes or no"
-        ;;
-      *) ui_err "please answer y or n (b to cancel)" ;;
+      *) ui_err "please answer y or n (Enter = no)" ;;
     esac
   done
 }
+# the same, but --yes can NOT answer it (revealing a secret, discarding someone else's edits)
+confirm_force() {
+  local __save=$GM_YES __rc=0
+  GM_YES=0
+  confirm "$@" || __rc=$?
+  GM_YES=$__save
+  return "$__rc"
+}
 
+# confirm_typed "What will be destroyed" [word]
+#   ONLY for destructive purges (uninstall, replacing a whole database). The word is matched
+#   case-insensitively; Enter cancels; anything else asks again and says what to type.
 _confirm_typed() {  # _confirm_typed honour_yes "message" word
   local __t_msg=$2 __t_word=${3:-yes} __t_l __t_p __t_rc
   if [[ $1 == 1 && $GM_YES == 1 ]]; then return 0; fi
   ui_warn "$__t_msg"
   while :; do
-    in_prompt __t_p "Type ${R_WARN}${__t_word}${R_0}${R_TITLE} to continue, b to cancel" ""
+    in_prompt __t_p "Type ${R_WARN}${__t_word}${R_0}${R_TITLE} to confirm, or press Enter to cancel" ""
     in_read __t_l "$__t_p" && __t_rc=0 || __t_rc=$?
     if ((__t_rc != 0)); then return 10; fi
     case ${__t_l,,} in
       "$__t_word") return 0 ;;
-      b | back | cancel) return 10 ;;
-      "") ;;
-      *) ui_err "not confirmed - type exactly '$__t_word', or b to cancel" ;;
+      "" | b | back | cancel) return 10 ;;
+      *) ui_err "not confirmed - type '$__t_word' to go ahead, or press Enter to cancel" ;;
     esac
   done
 }
 confirm_typed()       { _confirm_typed 1 "$@"; }     # --yes skips it
-confirm_typed_force() { _confirm_typed 0 "$@"; }     # --yes can NOT skip it (secrets, destructive)
+confirm_typed_force() { _confirm_typed 0 "$@"; }     # --yes can NOT skip it
 
 # pick_many RESULT "Title" LABELS SELECTED
 #   RESULT, LABELS and SELECTED are array names. SELECTED holds the initial 0/1 flags.

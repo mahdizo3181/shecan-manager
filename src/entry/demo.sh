@@ -86,7 +86,7 @@ demo_domain_add() {
     ui_ok "$h is already in the list"
     return 0
   fi
-  confirm "Add $h?" y || act_cancel
+  confirm "Add $h?" || act_cancel
   act_step "Updating the list"
   act_do "add $h to the list" bash -c 'printf "%s\n" "$1" >>"$2"' _ "$h" "$DEMO_DIR/domains"
 }
@@ -97,7 +97,7 @@ demo_domain_remove() {
   mapfile -t list <"$DEMO_DIR/domains"
   if ((${#list[@]} == 0)); then act_cancel "the list is empty"; fi
   prompt_choice pick "Remove which host (number or name)" "" "${list[@]}" || act_cancel
-  confirm "Remove $pick?" n || act_cancel
+  confirm "Remove $pick?" || act_cancel
   act_step "Updating the list"
   act_do "remove $pick from the list" demo_domains_without "$pick"
 }
@@ -107,7 +107,7 @@ demo_service_start() {
   act_do "start the relay" bash -c 'sleep 0.4; echo running >"$1"' _ "$DEMO_DIR/service"
 }
 demo_service_stop() {
-  confirm "Stop the relay? Gemini requests pause while it is down." n || act_cancel
+  confirm "Stop the relay? Gemini requests pause while it is down." || act_cancel
   act_step "Stopping xray-gemini"
   act_do "stop the relay" bash -c 'sleep 0.4; echo stopped >"$1"' _ "$DEMO_DIR/service"
 }
@@ -120,9 +120,9 @@ demo_setup() {  # a wizard: every prompt re-asks on a typo and b cancels cleanly
   prompt_ipv4 fip "Foreign server IPv4" || act_cancel
   prompt_port port "Relay port" 20443 || act_cancel
   prompt_choice ver "Xray version" latest latest 26.3.27 25.12.1 || act_cancel
-  prompt_secret url "Shecan registration URL" || act_cancel
-  ui_info "foreign=$fip  port=$port  xray=$ver  url=(hidden, ${#url} characters)"
-  confirm "Apply this configuration?" y || act_cancel
+  prompt_text url "Shecan registration URL" || act_cancel
+  ui_info "foreign=$fip  port=$port  xray=$ver  url=(${#url} characters)"
+  confirm "Apply this configuration?" || act_cancel
   act_step "Writing the configuration"
   act_do "write the config for $fip:$port" sleep 0.4
   act_commit                                   # step 1 is durable from here on

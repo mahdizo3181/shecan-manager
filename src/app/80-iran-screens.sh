@@ -4,7 +4,7 @@
 
 iran_en_installed() {
   if iran_installed; then return 0; fi
-  MENU_WHY="the relay is not installed - press s for the setup"
+  MENU_WHY="needs the relay: choose 1 first"
   return 1
 }
 
@@ -59,18 +59,19 @@ iran_bk_open() {  # call: handler - remember which backup, then push its screen
 }
 
 iran_backups_build() {
-  local i=0 d
+  local i=1 d
   menu_reset backups
+  menu_item backups 1 "Undo the most recent change set" "the newest run that changed something" action:iran_act_rollback
   while IFS= read -r d; do
     i=$((i + 1))
-    if ((i > 20)); then break; fi
+    if ((i > 21)); then break; fi
     menu_item backups "$i" "$(basename "$d")" "$(iran_bk_summary "$d")" "call:iran_bk_open $d"
   done < <(bk_dirs)
 }
 iran_backups_card() {
   ui_box_top "Backups ($BACKUP_ROOT)"
   if [[ -z $(bk_dirs) ]]; then ui_box_row "${C_DIM}no backups yet: they are created the first time something changes${C_0}"; fi
-  ui_box_row "${C_DIM}pick one to diff it, restore its config, or undo the whole run${C_0}"
+  ui_box_row "${C_DIM}1 undoes the newest change set; pick a backup to diff it, restore its config, or undo its run${C_0}"
   ui_box_bottom
 }
 
@@ -87,52 +88,49 @@ iran_bkdetail_card() {
 }
 
 # ---- the screen tree ------------------------------------------------------------------------------------
+# Main menu: one numbered list. Setup is item 1. Every screen has  r) Refresh   0) Exit/Back.
 iran_screens() {
   menu_screen main "Iran relay" iran_status
-  menu_item main 1 "Health check"          "live checks, what to do"      call:iran_act_health
-  menu_item main 2 "Repair"                "fix what the checks flag"     screen:repair iran_en_installed
-  menu_item main 3 "Register IP (Shecan)"  "re-register + verify DNS"    action:iran_act_register iran_en_installed
-  menu_item main 4 "Connection info"       "what the foreign side needs"  screen:connection iran_en_installed
-  menu_item main 5 "Allowed foreign IP"    "change / re-check the rule"   action:iran_act_change_ip iran_en_installed
-  menu_item main 6 "Domains"               "hosts routed through Shecan"  screen:domains iran_en_installed
-  menu_item main 7 "Logs"                  "relay, timer, access log"     screen:logs iran_en_installed
-  menu_item main 8 "Service, timer, alerts" "start/stop, Telegram"        screen:service iran_en_installed
-  menu_item main 9 "Backups"               "diff, restore, undo a run"    screen:backups iran_en_installed
-  menu_item main s "Setup / re-run setup"  "install or repair end to end" action:iran_act_setup
-  menu_item main u "Uninstall"             "remove only what we created"  action:iran_act_uninstall
+  menu_item main 1 "Setup / Reconfigure Relay"       "" action:iran_act_setup
+  menu_item main 2 "Health Check & Status"           "" screen:health
+  menu_item main 3 "Register with Shecan"            "" action:iran_act_register iran_en_installed
+  menu_item main 4 "Change Allowed Foreign IP"       "" action:iran_act_change_ip iran_en_installed
+  menu_item main 5 "Manage Domain Rules"             "" screen:domains iran_en_installed
+  menu_item main 6 "Service & Watch Timer Controls"  "" screen:service iran_en_installed
+  menu_item main 7 "View Logs"                       "" screen:logs iran_en_installed
+  menu_item main 8 "Backups & Rollback"              "" screen:backups iran_en_installed
+  menu_item main 9 "Uninstall"                       "" action:iran_act_uninstall
 
-  menu_screen repair "Repair" iran_status
-  menu_item repair 1 "Fix everything that is wrong" "runs 2-5, each is idempotent" "action:iran_act_repair all"
-  menu_item repair 2 "Firewall rule"               "re-add the allow rule"         "action:iran_act_repair firewall"
-  menu_item repair 3 "Relay config"                "catch-all guard + domain list" "action:iran_act_repair config"
-  menu_item repair 4 "Health timer"                "single installed copy"         "action:iran_act_repair timer"
-  menu_item repair 5 "Shecan registration"         "register + verify DNS"         "action:iran_act_repair register"
+  menu_screen health "Health Check & Status" iran_status
+  menu_item health 1 "Run the live health check now"        "what is wrong and what to do" call:iran_act_health
+  menu_item health 2 "Fix everything that is wrong"         "runs 3-5 and the registration"  "action:iran_act_repair all" iran_en_installed
+  menu_item health 3 "Repair the firewall rule"             "" "action:iran_act_repair firewall" iran_en_installed
+  menu_item health 4 "Repair the relay config"              "catch-all guard + domain list" "action:iran_act_repair config" iran_en_installed
+  menu_item health 5 "Repair the watch timer"               "" "action:iran_act_repair timer" iran_en_installed
+  menu_item health 6 "Connection info for the foreign server" "" action:iran_act_info iran_en_installed
+  menu_item health 7 "Reveal the SS key once"               "" action:iran_act_reveal_key iran_en_installed
 
-  menu_screen connection "Connection info"
-  menu_item connection 1 "Show connection info" "IP, port, masked key, commands" action:iran_act_info
-  menu_item connection 2 "Reveal the key once"  "typed confirmation required"    action:iran_act_reveal_key
-
-  menu_screen domains "Domains" iran_domains_card
+  menu_screen domains "Manage Domain Rules" iran_domains_card
   menu_item domains 1 "Add a hostname"    "checked with xray -test first" action:iran_act_domain_add
-  menu_item domains 2 "Remove a hostname" "pick by number or name"        action:iran_act_domain_remove
+  menu_item domains 2 "Remove a hostname" "" action:iran_act_domain_remove
 
-  menu_screen logs "Logs" iran_logs_card
+  menu_screen service "Service & Watch Timer Controls" iran_service_card
+  menu_item service 1 "Start the relay"    "" "action:iran_act_service start"
+  menu_item service 2 "Restart the relay"  "" "action:iran_act_service restart"
+  menu_item service 3 "Stop the relay"     "Gemini pauses while it is down" "action:iran_act_service stop"
+  menu_item service 4 "Turn the watch timer ON"  "" "action:iran_act_timer on"
+  menu_item service 5 "Turn the watch timer OFF" "" "action:iran_act_timer off"
+  menu_item service 6 "Telegram alerts: set or change" "" action:iran_act_tg_set
+  menu_item service 7 "Telegram alerts: remove"        "" action:iran_act_tg_off
+  menu_item service 8 "Install / update this tool's copy" "the timer runs it" action:iran_act_install_self
+
+  menu_screen logs "View Logs" iran_logs_card
   menu_item logs 1 "Last 50 lines: relay"        "" "view:iran_act_logs relay"
-  menu_item logs 2 "Last 50 lines: health timer" "" "view:iran_act_logs timer"
+  menu_item logs 2 "Last 50 lines: watch timer"  "" "view:iran_act_logs timer"
   menu_item logs 3 "Live tail"                   "Ctrl-C stops the tail only" call:iran_logs_follow
   menu_item logs 4 "Access log ON for N minutes" "switches itself off" action:iran_act_access_on
   menu_item logs 5 "Access log OFF now"          "" action:iran_act_access_off
 
-  menu_screen service "Service" iran_service_card
-  menu_item service 1 "Start relay"   "" "action:iran_act_service start"
-  menu_item service 2 "Restart relay" "" "action:iran_act_service restart"
-  menu_item service 3 "Stop relay"    "Gemini pauses while it is down" "action:iran_act_service stop"
-  menu_item service 4 "Health timer ON"  "" "action:iran_act_timer on"
-  menu_item service 5 "Health timer OFF" "" "action:iran_act_timer off"
-  menu_item service 6 "Telegram alerts: set / change" "" action:iran_act_tg_set
-  menu_item service 7 "Telegram alerts: remove"       "" action:iran_act_tg_off
-  menu_item service 8 "Install / update this tool's copy" "the timer runs it" action:iran_act_install_self
-
-  menu_screen backups "Backups" iran_backups_card iran_backups_build
+  menu_screen backups "Backups & Rollback" iran_backups_card iran_backups_build
   menu_screen bkdetail "Backup" iran_bkdetail_card iran_bkdetail_build
 }

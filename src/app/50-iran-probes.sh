@@ -3,21 +3,21 @@
 #
 # A probe prints  LEVEL <TAB> BADGE <TAB> detail [<TAB> hint]  and runs in its own subshell, in
 # parallel with the others, so loading the installed settings inside it is safe and a slow DNS
-# lookup does not delay the rest. Every hint names a repair that exists: "Repair > X" in the menu,
+# lookup does not delay the rest. Every hint names a repair that exists: "Health Check & Status > Repair ..." in the menu,
 # or  gemini-menu iran repair X  on the command line (see 60-iran-actions.sh, iran_reconcile_*).
 
 _na() { printf 'off\tN/A\tnot installed\n'; }
 
 pr_service() {
   if ! iran_installed; then
-    printf 'fail\tMISSING\tthe relay is not installed on this server\tRun the setup: press s (or: gemini-menu iran setup)\n'
+    printf 'fail\tMISSING\tthe relay is not installed on this server\tChoose 1 (Setup / Reconfigure Relay), or: gemini-menu iran setup\n'
     return 0
   fi
   iran_load_runtime
   if systemctl is-active --quiet "$SVC" 2>/dev/null; then
     printf 'ok\tACTIVE\t%s is running\n' "$SVC"
   else
-    printf 'fail\tSTOPPED\t%s is not running\tService > Start. Logs > last 50 lines shows why it stopped.\n' "$SVC"
+    printf 'fail\tSTOPPED\t%s is not running\tService & Watch Timer Controls > Start the relay. View Logs shows why it stopped.\n' "$SVC"
   fi
 }
 
@@ -27,7 +27,7 @@ pr_port() {
   if [[ -n $(ss -tlnH "sport = :$SS_PORT" 2>/dev/null) ]]; then
     printf 'ok\tLISTENING\tport %s/tcp accepts connections\n' "$SS_PORT"
   else
-    printf 'fail\tCLOSED\tnothing listens on port %s\tThe relay is down or the port is taken: Service > Restart.\n' "$SS_PORT"
+    printf 'fail\tCLOSED\tnothing listens on port %s\tThe relay is down or the port is taken: Service & Watch Timer Controls > Restart.\n' "$SS_PORT"
   fi
 }
 
@@ -39,7 +39,7 @@ pr_firewall() {
   elif fw_present "$FW_KIND" "$FOREIGN_IP" "$SS_PORT"; then
     printf 'ok\tALLOWED\tonly %s may reach port %s (%s)\n' "$FOREIGN_IP" "$SS_PORT" "$FW_KIND"
   else
-    printf 'fail\tNO RULE\tno rule lets %s reach port %s (%s)\tRepair > Firewall  (gemini-menu iran repair firewall)\n' "${FOREIGN_IP:-?}" "$SS_PORT" "$FW_KIND"
+    printf 'fail\tNO RULE\tno rule lets %s reach port %s (%s)\tHealth Check & Status > Repair the firewall rule (or: gemini-menu iran repair firewall)\n' "${FOREIGN_IP:-?}" "$SS_PORT" "$FW_KIND"
   fi
 }
 
@@ -52,7 +52,7 @@ pr_dns() {
   if verify_hijack; then
     printf 'ok\tHIJACKED\tShecan answers differ from a neutral resolver (live check)\n'
   else
-    printf 'fail\tINACTIVE\t%s\tRepair > Register this IP with Shecan. If it keeps failing, the URL/token may have expired.\n' "${VERIFY_MSG%% (*}"
+    printf 'fail\tINACTIVE\t%s\tRegister with Shecan (3). If it keeps failing, the URL/token may have expired.\n' "${VERIFY_MSG%% (*}"
   fi
 }
 
@@ -61,12 +61,12 @@ pr_register() {
   local t age
   t=$(iran_last_register)
   if [[ -z $t ]]; then
-    printf 'warn\tNEVER\tno successful Shecan registration recorded\tRepair > Register, or wait for the 5-minute timer.\n'
+    printf 'warn\tNEVER\tno successful Shecan registration recorded\tRegister with Shecan (3), or wait for the 5-minute timer.\n'
     return 0
   fi
   age=$(($(now) - t))
   if ((age > 1200)); then
-    printf 'warn\tSTALE\tlast registration %s\tThe timer should do it every 5 min: check the Timer row.\n' "$(fmt_age "$age")"
+    printf 'warn\tSTALE\tlast registration %s\tThe watch timer should do it every 5 min: check the Timer row.\n' "$(fmt_age "$age")"
   else
     printf 'ok\tFRESH\tIP registered with Shecan %s\n' "$(fmt_age "$age")"
   fi
@@ -75,9 +75,9 @@ pr_register() {
 pr_timer() {
   iran_installed || { _na; return 0; }
   if ! systemctl is-active --quiet "$WATCH_SVC.timer" 2>/dev/null; then
-    printf 'warn\tOFF\tthe health timer is not active\tRepair > Timer  (gemini-menu iran repair timer)\n'
+    printf 'warn\tOFF\tthe health timer is not active\tHealth Check & Status > Repair the watch timer (or: gemini-menu iran repair timer)\n'
   elif [[ -e $LEGACY_WATCH_BIN ]] || ! grep -q "^ExecStart=$INSTALL_PATH " "$SYSTEMD_DIR/$WATCH_SVC.service" 2>/dev/null; then
-    printf 'warn\tOUTDATED\tthe timer runs an old separate copy of the script\tRepair > Timer switches it to %s\n' "$INSTALL_PATH"
+    printf 'warn\tOUTDATED\tthe timer runs an old separate copy of the script\tHealth Check & Status > Repair the watch timer switches it to %s\n' "$INSTALL_PATH"
   else
     printf 'ok\tACTIVE\thealth timer every 5 min (runs %s)\n' "$INSTALL_PATH"
   fi
@@ -88,7 +88,7 @@ pr_guard() {
   if [[ $(cfg_py catchall 2>/dev/null) == yes ]]; then
     printf 'ok\tGUARDED\tthe relay refuses everything except the Gemini hosts\n'
   else
-    printf 'fail\tOPEN PROXY\tthe config has no catch-all block: the relay could proxy anything\tRepair > Relay config  (gemini-menu iran repair config)\n'
+    printf 'fail\tOPEN PROXY\tthe config has no catch-all block: the relay could proxy anything\tHealth Check & Status > Repair the relay config (or: gemini-menu iran repair config)\n'
   fi
 }
 
@@ -97,7 +97,7 @@ pr_access() {
   local until
   until=$(state_get access_until)
   if [[ $(cfg_py access 2>/dev/null) == on ]]; then
-    printf 'warn\tON\taccess log is recording%s\tLogs > Access log OFF now\n' "${until:+ (auto-off in $(((until - $(now)) / 60 + 1)) min)}"
+    printf 'warn\tON\taccess log is recording%s\tView Logs > Access log OFF now\n' "${until:+ (auto-off in $(((until - $(now)) / 60 + 1)) min)}"
   else
     printf 'off\tOFF\tnormal: connections are not recorded\n'
   fi

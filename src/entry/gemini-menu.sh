@@ -111,7 +111,7 @@ offer_install_self() {
   ui_blank
   if [[ -x $INSTALL_PATH ]]; then ui_info "A different version of this tool is installed as $INSTALL_PATH."
   else ui_info "First run. This tool can install itself so you only type: gemini-menu (the health timer runs that copy)."; fi
-  confirm "Install / update $INSTALL_PATH now?" y
+  confirm "Install / update $INSTALL_PATH now?"
   rc=$?
   if ((rc == 0)); then
     act_run "Install $INSTALL_PATH" iran_act_install_self

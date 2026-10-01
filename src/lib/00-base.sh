@@ -48,7 +48,7 @@ GM_READING=0
 gm_on_int() {
   GM_INT=1
   if ((GM_READING)); then
-    printf '\n  %sCtrl-C does not quit the menu - type q to quit, b to go back.%s\n' "${C_DIM:-}" "${C_0:-}"
+    printf '\n  %sCtrl-C does not quit the menu - choose 0 to go back or exit.%s\n' "${C_DIM:-}" "${C_0:-}"
   fi
 }
 

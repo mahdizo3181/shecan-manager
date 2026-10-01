@@ -205,7 +205,7 @@ iran_need_installed() {
     iran_load_runtime
     return 0
   fi
-  act_fail "the relay is not installed here - run the setup first (menu: s, or: gemini-menu iran setup)"
+  act_fail "the relay is not installed here - run the setup first (menu 1, or: gemini-menu iran setup)"
 }
 
 # ---- writers shared by setup and repair ------------------------------------------------------------

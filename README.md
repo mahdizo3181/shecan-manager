@@ -24,7 +24,7 @@ The first interactive run offers to install the file as `/usr/local/bin/gemini-m
 ## Using it
 
 ```
-gemini-menu                          menu (Enter-confirmed, never fires on a single keypress)
+gemini-menu                          menu: numbered list, type a number + Enter (r = refresh, 0 = back / exit)
 gemini-menu iran help                every Iran command
 gemini-menu foreign help             every foreign command
 gemini-menu [flags] iran|foreign <command>
@@ -38,7 +38,7 @@ gemini-menu [flags] iran|foreign <command>
 | Day-2 | `register`, `foreign-ip`, `domain`, `logs`, `access-on`, `service`, `telegram`, `backups` | `test`, `scope`, `domain`, `learn`, `sync-iran`, `backups` |
 | Undo | `iran rollback`, `iran uninstall` | `foreign rollback`, `foreign revert` |
 
-`status` exits 0 (healthy), 1 (warnings) or 2 (broken). **Common flags:** `--dry-run` prints what would happen and changes nothing, `--yes` accepts plain confirmations (destructive steps that need a typed confirmation say so), `--ascii`, `--no-color`. Backups go to `/root/gemini-shecan-backup/<timestamp>/`. Secrets (Shecan URL, SS key, Telegram token) are never printed or logged.
+`status` exits 0 (healthy), 1 (warnings) or 2 (broken). **Common flags:** `--dry-run` prints what would happen and changes nothing, `--yes` answers the plain `[y/N]` confirmations (Enter always means No), `--ascii`, `--no-color`. Backups go to `/root/gemini-shecan-backup/<timestamp>/`. Secrets (Shecan URL, SS key, Telegram token) are never printed or logged.
 
 `setup-iran.sh` and `setup-foreign.sh` are thin shims kept for the old command lines (`./setup-iran.sh --dry-run`, `./setup-foreign.sh test`); they call `gemini-menu`.
 
@@ -66,7 +66,7 @@ scp root@<IRAN_IP>:/root/gemini-shecan/ss.key /root/gemini-ss.key && chmod 600 /
 gemini-menu foreign test
 ```
 
-`setup` checks the relay port first, finds the panel database and Xray, patches the Xray **template** (outbound `ir-gemini` appended last; two rules inserted right after `bittorrent -> blocked`: UDP/443 for the domains -> blocked so QUIC falls back to TCP, and the domains -> `ir-gemini`), validates it with the panel's own Xray, and only then writes it. **The restart drops all user connections for a few seconds**, so it asks you to type `yes`. The write is compare-and-swap: if someone saved in the panel in the meantime, nothing is written. If the restart or the regenerated config does not check out, the previous template is restored automatically.
+`setup` checks the relay port first, finds the panel database and Xray, patches the Xray **template** (outbound `ir-gemini` appended last; two rules inserted right after `bittorrent -> blocked`: UDP/443 for the domains -> blocked so QUIC falls back to TCP, and the domains -> `ir-gemini`), validates it with the panel's own Xray, and only then writes it. **The restart drops all user connections for a few seconds**, so it asks `Proceed? [y/N]` first. The write is compare-and-swap: if someone saved in the panel in the meantime, nothing is written. If the restart or the regenerated config does not check out, the previous template is restored automatically.
 
 Domain rules need sniffing (tls/http, `routeOnly` off) on the client inbounds; `foreign sniffing audit` lists the ones that would miss, `--fix-sniffing` (or `sniffing fix`) corrects them and keeps the old values in the backup. If the phone client resolves DNS itself and sends IPs, turn on FakeDNS in the client.
 

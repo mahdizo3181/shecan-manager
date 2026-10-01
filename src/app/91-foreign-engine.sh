@@ -622,8 +622,8 @@ foreign_commit() {
     ui_ok "new template validated with the panel's Xray"
   fi
   if is_dry; then dry_say "would back up the DB, write the template (compare-and-swap), restart: $RESTART_CMD"; return 0; fi
-  confirm_typed "The panel will restart ($RESTART_CMD).
-  This drops ALL user connections for a few seconds." yes || act_cancel
+  ui_warn "The panel will restart ($RESTART_CMD). This drops ALL user connections for a few seconds."
+  confirm "Proceed?" || act_cancel
 
   act_step "Back up the panel database"
   BK=""                                       # every commit gets its own backup folder
@@ -691,7 +691,7 @@ foreign_sync_iran() {  # the COMPLETE current list
   if v_ipv4 "$ip" >/dev/null 2>&1 && command -v ssh >/dev/null 2>&1 \
     && ssh -o BatchMode=yes -o ConnectTimeout=6 -- "root@$ip" true >/dev/null 2>&1; then
     if is_dry; then dry_say "SSH to $ip works: would run it there: $cmd"; return 0; fi
-    if confirm "SSH to the Iran server ($ip) works. Push the new list there now?" y; then
+    if confirm "SSH to the Iran server ($ip) works. Push the new list there now?"; then
       if ssh -o BatchMode=yes -- "root@$ip" "$cmd"; then ui_ok "Iran relay updated"; else ui_warn "the push failed - run this ON the Iran server:  $cmd"; fi
       return 0
     fi

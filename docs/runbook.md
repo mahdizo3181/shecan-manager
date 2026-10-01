@@ -55,7 +55,7 @@ scp root@<IRAN_IP>:/root/gemini-shecan/ss.key /root/gemini-ss.key && chmod 600 /
 
 # a) dry run: validates the patched template with the panel's own Xray, writes nothing
 ./gemini-menu.sh --role foreign setup --dry-run --iran-ip <IRAN_IP> --key-file /root/gemini-ss.key
-# b) real run: type `yes` at the prompt (the panel restarts, users reconnect within seconds)
+# b) real run: answer y at "Proceed? [y/N]" (the panel restarts, users reconnect within seconds)
 ./gemini-menu.sh --role foreign setup --iran-ip <IRAN_IP> --key-file /root/gemini-ss.key
 # c) verify
 gemini-menu foreign status ; echo "exit=$?"              # 0 healthy; 1 = warnings (see the hint lines)
@@ -71,7 +71,7 @@ Note the backup folder printed during (b): `/root/gemini-shecan-backup/<timestam
 | Situation | Command |
 |---|---|
 | Gemini misbehaves, you want the old routing back *quickly*, keep the setup | `gemini-menu foreign routing off` (rules stay, match nothing) ... `routing on` to return |
-| Undo the last change to the panel | `gemini-menu foreign rollback` (restores the saved template; asks first; if the template was edited in the panel afterwards it refuses unless you type `yes`) |
+| Undo the last change to the panel | `gemini-menu foreign rollback` (restores the saved template; asks first; if the template was edited in the panel afterwards it asks again, defaulting to No) |
 | Remove the Gemini outbound and rules entirely | `gemini-menu foreign revert` |
 | The panel database itself is damaged | `gemini-menu foreign rollback --restore-full-db` (restores the DB COPY: later traffic counters and client changes are lost) |
 | The panel's own Xray config page shows an error | restore from the panel's backup, or `foreign rollback`; the tool already restores automatically when the restart fails |

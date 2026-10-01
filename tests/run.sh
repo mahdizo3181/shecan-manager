@@ -99,20 +99,31 @@ prompt_port port "Port" >"$OUT" 2>&1 <<<"cancel"; eq "cancel word -> 10" 10 $?
 h=""; prompt_hostname h "Host" >"$OUT" 2>&1 <<<"HTTP://Aistudio.Google.com/x"; eq "prompt_hostname normalises" aistudio.google.com "$h"
 n=""; prompt_int n "Minutes" 1 240 10 >"$OUT" 2>&1 <<<$'0\n999\n\n'; eq "prompt_int: range errors then default" 10 "$n"
 e=""; IN_ALLOW_EMPTY=1 prompt_valid e "Optional" "" v_nonempty >"$OUT" 2>&1 <<<""; eq "IN_ALLOW_EMPTY lets an empty answer through" "0" "$?"
-s=""; prompt_secret s "Secret" >"$OUT" 2>&1 <<<$'\nhunter2'; eq "secret: empty is re-asked" hunter2 "$s"; hasnt "secret is not echoed back" hunter2
+u=""; prompt_valid u "URL" "" v_url >"$OUT" 2>&1 <<<$'not a url\nhttps://shecan.example/register?token=abc123'; eq "a URL is typed VISIBLY and validated (re-asks on junk)" "https://shecan.example/register?token=abc123" "$u"
+has "...the typo got an inline error" "expected a URL starting with"
+has "...the prompt is 'Label: ' style" "URL: "
 c=""; prompt_choice c "Pick" "" red green >"$OUT" 2>&1 <<<$'7\ngreen'; eq "prompt_choice" green "$c"
 
-confirm "Sure?" >"$OUT" 2>&1 <<<$'maybe\ny'; eq "confirm: invalid answer re-asks, then yes" 0 $?
-confirm "Sure?" >"$OUT" 2>&1 <<<"n"; eq "confirm: no -> 1" 1 $?
-confirm "Sure?" y >"$OUT" 2>&1 <<<""; eq "confirm: Enter takes default y" 0 $?
-confirm "Sure?" n >"$OUT" 2>&1 <<<""; eq "confirm: Enter takes default n" 1 $?
-confirm "Sure?" >"$OUT" 2>&1 <<<""; eq "confirm: Enter without default re-asks, then EOF cancels" 10 $?
-confirm "Sure?" >"$OUT" 2>&1 <<<"b"; eq "confirm: b -> 10" 10 $?
-GM_YES=1 confirm "Sure?" >"$OUT" 2>&1 </dev/null; eq "--yes answers confirm" 0 $?
-confirm_typed "Dangerous" yes >"$OUT" 2>&1 <<<$'nope\nyes'; eq "confirm_typed needs the word" 0 $?
-confirm_typed "Dangerous" yes >"$OUT" 2>&1 <<<"b"; eq "confirm_typed: b cancels" 10 $?
-GM_YES=1 confirm_typed "Dangerous" yes >"$OUT" 2>&1 </dev/null; eq "--yes skips confirm_typed" 0 $?
-GM_YES=1 confirm_typed_force "Secret" yes >"$OUT" 2>&1 <<<"b"; eq "--yes can NOT skip confirm_typed_force" 10 $?
+confirm "Proceed?" >"$OUT" 2>&1 <<<"y"; eq "confirm: y" 0 $?
+for w in Y yes YES Yes; do confirm "Proceed?" >"$OUT" 2>&1 <<<"$w"; eq "confirm accepts '$w'" 0 $?; done
+confirm "Proceed?" >"$OUT" 2>&1 <<<""; eq "confirm: Enter = NO (the safe default)" 1 $?
+confirm "Proceed?" y >"$OUT" 2>&1 <<<""; eq "confirm: a 'default yes' argument no longer exists - Enter is still NO" 1 $?
+has "confirm prompt is exactly 'Proceed? [y/N]: '" "Proceed? [y/N]: "
+for w in n N no NO; do confirm "Proceed?" >"$OUT" 2>&1 <<<"$w"; eq "confirm: '$w' -> no" 1 $?; done
+confirm "Proceed?" >"$OUT" 2>&1 <<<$'continue\ny'; eq "confirm: 'continue' does NOT abort - it asks again" 0 $?
+has "...with a plain hint" "please answer y or n (Enter = no)"
+confirm "Proceed?" >"$OUT" 2>&1 <<<$'maybe\nn'; eq "confirm: junk then n" 1 $?
+confirm "Proceed?" >"$OUT" 2>&1 <<<"b"; eq "confirm: b -> cancelled" 10 $?
+confirm "Proceed?" >"$OUT" 2>&1 </dev/null; eq "confirm: EOF -> cancelled" 10 $?
+GM_YES=1 confirm "Proceed?" >"$OUT" 2>&1 </dev/null; eq "--yes answers confirm" 0 $?
+GM_YES=1 confirm_force "Show the key?" >"$OUT" 2>&1 <<<""; eq "confirm_force: --yes can NOT answer it (Enter = no)" 1 $?
+GM_YES=1 confirm_force "Show the key?" >"$OUT" 2>&1 <<<"y"; eq "confirm_force: an explicit y works" 0 $?
+confirm_typed "Delete all" yes >"$OUT" 2>&1 <<<$'continue\nyes'; eq "confirm_typed (purges only): wrong word re-asks, then the word" 0 $?
+has "...and says what to type" "type 'yes' to go ahead"
+confirm_typed "Delete all" yes >"$OUT" 2>&1 <<<"YES"; eq "confirm_typed is case-insensitive" 0 $?
+confirm_typed "Delete all" yes >"$OUT" 2>&1 <<<""; eq "confirm_typed: Enter cancels" 10 $?
+GM_YES=1 confirm_typed "Delete all" yes >"$OUT" 2>&1 </dev/null; eq "--yes skips confirm_typed" 0 $?
+GM_YES=1 confirm_typed_force "Replace the database" yes >"$OUT" 2>&1 <<<""; eq "--yes can NOT skip confirm_typed_force" 10 $?
 
 # ============================== multi-select ====================================================
 labels=(alpha beta gamma); sel=(1 0 0); chosen=(untouched)
@@ -181,22 +192,29 @@ menu_item root 2 "Sub" "" screen:sub
 menu_item root 3 "Locked" "" action:m_action m_off
 menu_screen sub "Sub"
 menu_item sub 1 "Nothing" "" action:m_action
-menu_run root >"$OUT" 2>&1 <<<$'zzz\n\n?\n1\n7.7.7.7\n3\nd\n2\nb\nb\nq'; rc=$?
-eq "menu_run exits cleanly on q" 0 "$rc"
+menu_run root >"$OUT" 2>&1 <<<$'zzz\n\n1\n7.7.7.7\n3\n2\n0\n0'; rc=$?
+eq "menu_run: 0 at the top level exits cleanly" 0 "$rc"
 has "unknown input -> one inline error" '"zzz" is not an option'
-has "action's prompt read the KEYBOARD, not the menu's item list" "ACTION GOT 7.7.7.7"
+has "...that points at the numbers, r and 0" "type a number from the list, r to refresh, or 0 to go back"
+has "an action's prompt read the KEYBOARD, not the menu's item list" "ACTION GOT 7.7.7.7"
 has "action result line appears" "[ OK ]"
 has "disabled item explains itself" "needs setup first"
-has "d toggles dry-run" "Dry-run is ON"
-has "submenu crumbs" "Root > Sub"
-has "b at top level is harmless" "top level"
-has "? shows help" "How this menu works"
-count "invalid input / help do not redraw the menu (4 draws: start, after action, after d, after back)" "+- Root -" 4
-GM_DRY=0
-menu_run root >"$OUT" 2>&1 <<<$'12\nq'; has "a typo is not an instant trigger: '12' is just invalid" '"12" is not an option'
+has "sub-screen breadcrumb" "Root > Sub"
+has "items are a NUMBERED list: '1) Do thing'" "1) Do thing"
+has "footer: r) Refresh" "r) Refresh"
+has "footer on the top screen: 0) Exit" "0) Exit"
+has "footer on a sub-screen: 0) Back" "0) Back"
+hasnt "no [1] bracket style and no letter shortcuts in the footer" "[q]"
+hasnt "no 'Dry-run' key in the footer" "Dry-run"
+count "invalid input does not redraw the menu (3 draws: start, after the action, after 0/back)" "+- Root -" 3
+menu_run root >"$OUT" 2>&1 <<<$'12\n0'; has "a typo is not an instant trigger: '12' is just invalid" '"12" is not an option'
+menu_run root >"$OUT" 2>&1 <<<$'r\n0'; eq "r refreshes" 0 $?
+menu_run root >"$OUT" 2>&1 <<<$'s\n0'; has "'s' is not a shortcut for anything" '"s" is not an option'
 menu_run root >"$OUT" 2>&1 </dev/null; eq "EOF on the menu ends it cleanly" 0 $?
 
 ( menu_screen bad "Bad"; menu_item bad q "x" "" back ) >"$OUT" 2>&1; eq "reserved keys are rejected at definition time" 1 $?
+( menu_screen bad "Bad"; menu_item bad s "Setup" "" back ) >"$OUT" 2>&1; eq "letter shortcuts for features are rejected (items are numbers)" 1 $?
+( menu_screen bad "Bad"; menu_item bad 0 "x" "" back ) >"$OUT" 2>&1; eq "0 is reserved for Back/Exit" 1 $?
 ( menu_screen bad2 "Bad"; menu_item bad2 1 "x" "" back; menu_item bad2 1 "y" "" back ) >"$OUT" 2>&1; eq "duplicate keys are rejected" 1 $?
 
 
@@ -215,6 +233,15 @@ shim setup-foreign.sh test;                    has "foreign shim: test" "ENGINE:
 shim setup-foreign.sh --yes test;              has "foreign shim: '--yes test' stays test (it used to run apply --yes!)" "ENGINE: --role foreign --yes test"; hasnt "..." "apply"
 shim setup-foreign.sh --dry-run audit;         has "foreign shim: '--dry-run audit'" "--role foreign --dry-run audit"
 shim setup-foreign.sh --iran-ip 9.9.9.9 --key-file /k; has "foreign shim: flag values are skipped" "foreign apply --iran-ip 9.9.9.9 --key-file /k"
+
+# ============================== house rules (these must never regress) ===========================
+sd2=$(mktemp -d "$GM_TMP/rules.XXXX")
+if grep -rnP '[\x{0600}-\x{06FF}\x{FB50}-\x{FDFF}\x{FE70}-\x{FEFF}]' src dist gemini-menu.sh setup-iran.sh setup-foreign.sh >"$sd2/p" 2>&1; then bad "no Persian/Arabic-script text anywhere in the tool" "$(head -3 "$sd2/p")"; else ok; fi
+if grep -rnE 'read -[a-z]*s[a-z]* |prompt_secret|in_read_secret' src >"$sd2/s" 2>&1; then bad "no hidden (silent) input anywhere" "$(head -3 "$sd2/s")"; else ok; fi
+if grep -rnE 'any key|Press any' src >"$sd2/k" 2>&1; then bad "no 'press any key' pauses" "$(head -3 "$sd2/k")"; else ok; fi
+if grep -rnE 'menu_item (main|health|domains|service|logs|backups|f_[a-z]+) [a-z] ' src/app >"$sd2/m" 2>&1; then bad "no letter-key menu items" "$(head -3 "$sd2/m")"; else ok; fi
+n_typed=$(grep -rn 'confirm_typed' src/app | grep -vc '^src/app/[0-9a-z-]*\.sh:[0-9]*:\s*#')
+eq "typed-word confirmations exist only for purges (uninstall, whole-DB restore)" 3 "$(grep -rn 'confirm_typed[a-z_]* "' src/app | wc -l)"
 
 # ============================== bundles =========================================================
 bash -n dist/demo.sh && ok || bad "demo bundle syntax"

@@ -133,7 +133,7 @@ need_cmds() {
   ui_warn "missing commands: ${missing[*]}"
   if is_dry; then dry_say "would offer: apt-get install -y ${pkgs[*]}"; return 0; fi
   if command -v apt-get >/dev/null 2>&1 && [[ $EUID -eq 0 ]]; then
-    confirm "Install the missing packages now (apt-get install -y ${pkgs[*]})?" y \
+    confirm "Install the missing packages now (apt-get install -y ${pkgs[*]})?" \
       || act_fail "missing commands: ${missing[*]}"
     must apt-get install -y "${pkgs[@]}"
     for c in "${missing[@]}"; do command -v "$c" >/dev/null 2>&1 || act_fail "$c is still missing after installing"; done

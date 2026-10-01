@@ -74,7 +74,7 @@ foreign_act_setup() {
   COMMIT_FIX_IDS=""
   if [[ $FIX_SNIFFING == 1 && $SNIFF_FLAGGED -gt 0 ]]; then COMMIT_FIX_IDS=all; fi
   if [[ $SNIFF_FLAGGED -gt 0 && $FIX_SNIFFING == 0 ]]; then
-    ui_warn "$SNIFF_FLAGGED inbound(s) need sniffing: not changed. Sniffing > Fix selected inbounds (or --fix-sniffing)."
+    ui_warn "$SNIFF_FLAGGED inbound(s) need sniffing: not changed. Inbounds: Scope & Sniffing > Fix sniffing (or --fix-sniffing)."
   fi
 
   foreign_commit "$GM_TMP/template.$ok.json"

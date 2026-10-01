@@ -59,7 +59,7 @@ for o in t.get("outbounds", []):
         print(s["address"], s["port"]); json.dump(o, open(sys.argv[3], "w")); sys.exit(0)
 sys.exit(1)
 PY
-    ) || act_fail "no '$TAG' outbound in the panel template - run the setup first (menu: s)"
+    ) || act_fail "no '$TAG' outbound in the panel template - run the setup first (menu 1, or: gemini-menu foreign setup)"
     IRAN_IP=${t% *}
     SS_PORT=${t#* }
   else
@@ -181,7 +181,7 @@ foreign_act_scope() {  # foreign_act_scope [all | TAG...]   (no argument: pick i
   local -a tags=() labels=() sel=() chosen=() picked=()
   need_panel
   foreign_facts || act_fail "cannot read the template"
-  [[ $T_STATE != missing ]] || act_fail "the Gemini rules are not in the template yet - run the setup first (menu: s)"
+  [[ $T_STATE != missing ]] || act_fail "the Gemini rules are not in the template yet - run the setup first (menu 1, or: gemini-menu foreign setup)"
   if (($# > 0)); then
     if [[ $1 == all ]]; then foreign_scope_apply; else foreign_scope_apply "$@"; fi
     return 0
@@ -196,7 +196,7 @@ foreign_act_scope() {  # foreign_act_scope [all | TAG...]   (no argument: pick i
   ((IN_OK)) || act_fail "choosing inbounds needs a terminal (or: scope all | scope set TAG...)"
   pick_many chosen "Scope: who uses $TAG (ticked inbounds send the Gemini hosts to Iran)" labels sel || act_cancel
   for i in "${chosen[@]}"; do picked+=("${tags[i]}"); done
-  ((${#picked[@]} > 0)) || act_fail "nothing ticked - to switch Gemini routing off use Routing > OFF"
+  ((${#picked[@]} > 0)) || act_fail "nothing ticked - to switch Gemini routing off use Gemini Routing ON / OFF"
   if ((${#picked[@]} == total)); then foreign_scope_apply; else foreign_scope_apply "${picked[@]}"; fi
 }
 
@@ -292,7 +292,7 @@ foreign_act_sniff_fix() {  # foreign_act_sniff_fix [ids|all]   (no argument: pic
     [[ $ids =~ ^[0-9]+(,[0-9]+)*$ ]] || act_fail "sniffing fix: use all or a comma-separated list of inbound ids (got '$ids')" 2
   fi
   ui_say "Will set on inbound id(s) $ids: sniffing ON with http+tls, routeOnly off, metadataOnly off."
-  ui_note "(The old values are saved in the backup, so Backups > restore can undo it.)"
+  ui_note "(The old values are saved in the backup, so Backups & Rollback can undo it.)"
   ftpl_read_or_fail
   cp "$GM_TMP/template.orig.json" "$GM_TMP/new.json"
   echo 0 >"$GM_TMP/new.json.changed"
@@ -375,13 +375,13 @@ foreign_act_learn() {
   need_panel
   ftpl_read_or_fail
   eval "$(py_tpl inspect "$GM_TMP/template.orig.json")"
-  [[ $T_HAS == 1 ]] || act_fail "$TAG is not set up yet - run the setup first (menu: s)"
+  [[ $T_HAS == 1 ]] || act_fail "$TAG is not set up yet - run the setup first (menu 1, or: gemini-menu foreign setup)"
   ((IN_OK)) || act_fail "learn mode needs a terminal (it walks you through using the phone app)"
   LEARN_PATH=$(learn_log_path)
   if [[ -z $LEARN_PATH ]]; then
     ui_say "The panel's access log is OFF (log.access = ${T_ACCESS/__unset__/unset}); learn mode reads it."
     ui_say "Turning it on changes the template and restarts the panel (users are dropped for a few seconds)."
-    confirm "Turn the access log on for now?" y || act_cancel
+    confirm "Turn the access log on for now?" || act_cancel
     LEARN_PATH=$GM_ROOT/var/log/gemini-menu-access.log
     if ! is_dry; then mkdir -p "$(dirname "$LEARN_PATH")"; : >>"$LEARN_PATH"; fi
     state_set learn_orig_access "${T_ACCESS:-none}"
@@ -445,7 +445,7 @@ PY
     fi
   fi
   if ((turned_on)); then
-    if confirm "Turn the access log back off? This restarts the panel again." y; then
+    if confirm "Turn the access log back off? This restarts the panel again."; then
       foreign_log_restore
       : >"$ACT_STATE"
     else
@@ -489,7 +489,7 @@ foreign_act_backup_restore() {  # DIR
 # an optional extra: --yes means "skip it" (only an explicit answer at a terminal enables it)
 foreign_ask_optional() {
   if [[ $GM_YES == 1 ]]; then return 1; fi
-  confirm "$1" n
+  confirm "$1"
 }
 
 # ================================================================== revert ====================
@@ -551,7 +551,7 @@ foreign_act_rollback() {  # foreign_act_rollback [DIR]   undo the newest run tha
     return 0
   fi
   ui_warn "This restarts the panel and drops ALL user connections for a few seconds."
-  confirm "Roll back now?" n || act_cancel
+  confirm "Roll back now?" || act_cancel
   if [[ $RESTORE_FULL_DB == 1 ]]; then
     [[ $RESTART_CMD == "systemctl restart x-ui" ]] || act_fail "--restore-full-db needs the default systemd setup (x-ui.service)"
     ui_warn "the WHOLE database copy is restored: traffic counters and clients changed since then are lost"
@@ -567,7 +567,7 @@ foreign_act_rollback() {  # foreign_act_rollback [DIR]   undo the newest run tha
     if ((rc == 3)); then
       ui_warn "the template in the panel is NOT what this run wrote: it was edited afterwards."
       ui_note "Restoring the saved one would discard those later edits."
-      confirm_typed_force "Restore the saved template anyway and lose the later edits?" yes || act_cancel
+      confirm_force "Restore the saved template anyway and lose the later edits?" || act_cancel
       panel_py restore "$DB" "$BK" - || act_fail "the restore failed"
     elif ((rc != 0)); then
       act_fail "the restore failed (exit $rc)"

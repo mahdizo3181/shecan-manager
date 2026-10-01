@@ -17,16 +17,20 @@
 #            dynamic items (a domain list, a backup list).
 # enable_fn  returns non-zero to grey an item out; it can set MENU_WHY to say why.
 #
-# Standard keys, always available on every screen (so items may not use them):
-#   b back   q quit   r refresh status   d toggle dry-run   ? help
-# Input is a line: type the key, edit with backspace/arrows, press Enter. Nothing fires on a
+# Layout and keys (the same on every screen):
+#     1) First action        <- items are NUMBERED, 1..n. There are no letter shortcuts for features.
+#     2) Second action
+#     ------------------------------------------
+#     r) Refresh                      0) Exit      (0 = Back on a sub-screen)
+# Input is a line: type the number, edit with backspace/arrows, press Enter. Nothing fires on a
 # single keypress. Unknown input prints one inline error; the screen is NOT redrawn.
+# (q / b are still understood as quiet aliases of 0, but they are not advertised.)
 
 declare -A M_TITLE=() M_ITEMS=() M_STATUS=() M_BUILD=()
 MENU_STACK=()
 MENU_QUIT=0 MENU_REDRAW=0 MENU_WHY=""
 MENU_US=$'\x1f'
-MENU_RESERVED=" b q r d h ? back quit exit refresh help "
+MENU_RESERVED=" 0 r q b back quit exit refresh "
 
 menu_screen() {  # menu_screen NAME "Title" [status_fn] [build_fn]
   [[ $1 =~ ^[a-z0-9_]+$ ]] || gm_fatal "screen name must be [a-z0-9_]+: $1"
@@ -41,7 +45,7 @@ menu_reset() { M_ITEMS[$1]=""; }
 menu_item() {  # menu_item NAME KEY "Label" "hint" HANDLER [enable_fn]
   local name=$1 key=${2,,} label=$3 hint=${4:-} handler=$5 enable=${6:-}
   [[ -n ${M_TITLE[$name]:-} ]] || gm_fatal "menu_item: screen '$name' is not defined"
-  [[ $key =~ ^[a-z0-9]{1,3}$ ]] || gm_fatal "menu key must be 1-3 letters/digits: '$2'"
+  [[ $key =~ ^[1-9][0-9]?$ ]] || gm_fatal "menu keys are numbers 1-99 (no letter shortcuts): '$2'"
   [[ $MENU_RESERVED != *" $key "* ]] || gm_fatal "menu key '$key' is reserved (screen $name)"
   [[ $handler =~ ^(screen:[a-z0-9_]+|action:.+|view:.+|call:.+|back|quit)$ ]] \
     || gm_fatal "menu item '$key' on '$name': bad handler '$handler'"
@@ -62,7 +66,7 @@ menu_crumbs() {  # menu_crumbs OUT  -> "Main > Domains"
 }
 
 menu_render() {  # menu_render NAME
-  local name=$1 crumbs key label hint handler enable why i n=0 kw=0 lw=0 rem kc lc hc foot dm
+  local name=$1 crumbs key label hint handler enable why i n=0 kw=0 lw=0 rem kc lc hc left right dm back_word
   local -a K=() L=() H=() W=() X=()
   ui_width
   if [[ -n ${M_BUILD[$name]:-} ]]; then "${M_BUILD[$name]}"; fi
@@ -77,64 +81,53 @@ menu_render() {  # menu_render NAME
     MENU_WHY=""
     if [[ -n $enable ]] && ! "$enable"; then why=${MENU_WHY:-unavailable}; fi
     K+=("$key") L+=("$label") H+=("$hint") W+=("$why")
-    if ((${#key} + 2 > kw)); then kw=$((${#key} + 2)); fi
+    if ((${#key} + 1 > kw)); then kw=$((${#key} + 1)); fi
     if ((${#label} > lw)); then lw=${#label}; fi
     n=$((n + 1))
   done <<<"${M_ITEMS[$name]}"
-  ((lw > 34)) && lw=34
+  ((lw > 40)) && lw=40
 
   menu_crumbs crumbs
   ui_box_top "$crumbs"
   if is_dry; then ui_box_row "${C_WARN}DRY-RUN is ON: actions only describe what they would do${C_0}"; fi
   if ((n == 0)); then ui_box_row "${C_DIM}(nothing here yet)${C_0}"; fi
   for ((i = 0; i < n; i++)); do
+    ui_clip lc "${L[i]}" "$lw"
     if [[ -n ${W[i]} ]]; then
-      kc="${C_DIM}[${K[i]}]${C_0}"
-      ui_clip lc "${L[i]}" "$lw"
-      hc="(${W[i]})"
+      kc="${C_DIM}${K[i]})${C_0}"
       ui_pad kc "$kc" "$kw"
       ui_pad lc "${C_DIM}${lc}${C_0}" "$lw"
-      ui_box_row " $kc  $lc  ${C_DIM}${hc}${C_0}"
+      ui_box_row "  $kc $lc  ${C_DIM}(${W[i]})${C_0}"
     else
-      kc="${C_KEY}[${K[i]}]${C_0}"
-      ui_clip lc "${L[i]}" "$lw"
+      kc="${C_KEY}${K[i]})${C_0}"
       ui_pad kc "$kc" "$kw"
       ui_pad lc "$lc" "$lw"
-      rem=$((UI_W - 4 - 1 - kw - 2 - lw - 2))
+      rem=$((UI_W - 4 - 2 - kw - 1 - lw - 2))
       hc=""
       if ((rem > 3 && ${#H[i]} > 0)); then
         ui_clip hc "${H[i]}" "$rem"
         hc="${C_DIM}${hc}${C_0}"
       fi
-      ui_box_row " $kc  $lc  $hc"
+      ui_box_row "  $kc $lc  $hc"
     fi
   done
   ui_box_sep
-  if is_dry; then dm="ON"; else dm="off"; fi
-  foot=""
-  if ((${#MENU_STACK[@]} > 1)); then foot+="${C_KEY}[b]${C_0} Back  "; fi
-  foot+="${C_KEY}[q]${C_0} Quit  ${C_KEY}[r]${C_0} Refresh  ${C_KEY}[d]${C_0} Dry-run ${dm}  ${C_KEY}[?]${C_0} Help"
-  ui_box_row " $foot"
+  if ((${#MENU_STACK[@]} > 1)); then back_word="Back"; else back_word="Exit"; fi
+  left="${C_KEY}r)${C_0} Refresh"
+  right="${C_KEY}0)${C_0} $back_word"
+  ui_vlen lw "$left"
+  ui_vlen kw "$right"
+  ui_repeat dm ' ' $((UI_W - 4 - 2 - lw - kw - 2))
+  ui_box_row "  $left$dm$right"
   ui_box_bottom
 }
 
-menu_help() {
-  ui_blank
-  ui_rule "How this menu works"
-  ui_say "Type the key of an item (for example ${C_KEY}1${C_0}) and press ${C_B}Enter${C_0}."
-  ui_say "Nothing runs until you press Enter, so you can correct a typo with Backspace."
-  ui_say "${C_KEY}b${C_0} back   ${C_KEY}q${C_0} quit   ${C_KEY}r${C_0} refresh the status   ${C_KEY}d${C_0} toggle dry-run"
-  ui_say "Ctrl-C stops the operation that is running; it never closes the menu."
-  ui_say "Inside an operation, type ${C_KEY}b${C_0} at any prompt to cancel it."
-  ui_blank
-}
-
-menu_pop() {
+menu_pop() {  # 0 / back: one level up; at the top level it leaves the menu
   if ((${#MENU_STACK[@]} > 1)); then
     unset 'MENU_STACK[-1]'
     MENU_REDRAW=1
   else
-    ui_note "You are at the top level. Type q to quit."
+    MENU_QUIT=1
   fi
 }
 
@@ -176,15 +169,9 @@ menu_dispatch() {  # menu_dispatch SCREEN "typed text"
   MENU_REDRAW=0
   case $in in
     "") return 0 ;;
+    0 | b | back) menu_pop; return 0 ;;
     q | quit | exit) MENU_QUIT=1; return 0 ;;
-    b | back) menu_pop; return 0 ;;
     r | refresh) probe_invalidate; MENU_REDRAW=1; return 0 ;;
-    d)
-      if is_dry; then GM_DRY=0; ui_ok "Dry-run is OFF: actions will change things"; else GM_DRY=1; ui_warn "Dry-run is ON: actions will only describe what they would do"; fi
-      MENU_REDRAW=1
-      return 0
-      ;;
-    "?" | h | help) menu_help; return 0 ;;
   esac
   # Find the item first, run it AFTER the loop: inside `while read <<<...` stdin is the item list,
   # and an action that prompts would read its answers from there instead of the keyboard.
@@ -193,7 +180,7 @@ menu_dispatch() {  # menu_dispatch SCREEN "typed text"
   done <<<"${M_ITEMS[$name]}"
   if ((!found)); then
     ui_safe shown "$typed" 24
-    ui_err "\"$shown\" is not an option here - type a key from the list (for example ${C_KEY}1${C_0}), or ? for help"
+    ui_err "\"$shown\" is not an option - type a number from the list, r to refresh, or 0 to go back"
     return 0
   fi
   why=""
@@ -208,7 +195,7 @@ menu_dispatch() {  # menu_dispatch SCREEN "typed text"
 }
 
 menu_run() {  # menu_run ROOT
-  local cur line rc crumbs prompt redraw=1
+  local cur line rc prompt redraw=1
   if [[ -z ${M_TITLE[$1]:-} ]]; then gm_fatal "menu_run: screen '$1' is not defined"; fi
   MENU_STACK=("$1")
   MENU_QUIT=0
@@ -222,13 +209,12 @@ menu_run() {  # menu_run ROOT
       menu_render "$cur"
       redraw=0
     fi
-    menu_crumbs crumbs
-    in_prompt prompt "$crumbs" ""
+    in_prompt prompt "Select an option" ""
     in_read line "$prompt" && rc=0 || rc=$?
     case $rc in
       0) ;;
       130)
-        ui_note "Ctrl-C only cancels a running operation. Type q to quit, b to go back."
+        ui_note "Ctrl-C only cancels a running operation. Choose 0 to go back or exit."
         continue
         ;;
       *)
