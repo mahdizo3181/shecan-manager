@@ -1,16 +1,5 @@
 # Gemini via Iran-side Shecan
 
-## Install (menu)
-
-On each server (as root):
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/mahdizo3181/shecan-manager/main/gemini-menu.sh -o /usr/local/bin/gemini-menu && chmod +x /usr/local/bin/gemini-menu
-gemini-menu
-```
-
-`setup-iran.sh` and `setup-foreign.sh` are thin wrappers around `gemini-menu.sh`; keep them in the same folder.
-
 Routes 9 Gemini hostnames out of the foreign 3X-UI Xray through a small relay on the Iran server, so they leave from the Iran IP that is registered with Shecan. Everything else keeps using the existing routing.
 
 ```
@@ -18,62 +7,82 @@ user -> Iran tunnel -> foreign Xray -(9 domains)-> ir-gemini (SS-2022) -> Iran X
                                      -(rest)----> existing outbounds, unchanged
 ```
 
-| Script | Runs on | What it does |
+One tool, `gemini-menu`, runs on both servers. It never touches the tunnel, the panel's inbounds or users, or existing firewall rules.
+
+## Install
+
+On each server, as root (needs `curl dnsutils openssl python3 iproute2 netcat-openbsd sqlite3`, all from apt; the tool offers to install what is missing):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mahdizo3181/shecan-manager/main/gemini-menu.sh -o gemini-menu.sh
+chmod +x gemini-menu.sh
+./gemini-menu.sh            # interactive menu; asks once which server this is, then remembers it
+```
+
+The first interactive run offers to install the file as `/usr/local/bin/gemini-menu`; `setup` on the Iran server does it too, because the health timer runs that installed file. The role is remembered in `/etc/gemini-shecan/role` (`gemini-menu role iran|foreign|show`).
+
+## Using it
+
+```
+gemini-menu                          menu (Enter-confirmed, never fires on a single keypress)
+gemini-menu iran help                every Iran command
+gemini-menu foreign help             every foreign command
+gemini-menu [flags] iran|foreign <command>
+```
+
+| | Iran server | Foreign server |
 |---|---|---|
-| `setup-iran.sh` | Iran server | Installs a separate Xray as service `xray-gemini`, opens its port to the foreign IP only, registers the IP with Shecan, verifies the DNS hijack, adds a 5-minute health timer |
-| `setup-foreign.sh` | Foreign server | Patches the Xray **template** in the 3X-UI database: outbound `ir-gemini` + two routing rules. Also has `test`, `audit`, `--rollback` |
+| Install / repair | `iran setup` | `foreign setup` |
+| Health | `iran status` | `foreign status` |
+| Repairs | `iran repair [all\|firewall\|config\|timer\|register]` | `foreign routing on\|off`, `foreign sniffing fix` |
+| Day-2 | `register`, `foreign-ip`, `domain`, `logs`, `access-on`, `service`, `telegram`, `backups` | `test`, `scope`, `domain`, `learn`, `sync-iran`, `backups` |
+| Undo | `iran rollback`, `iran uninstall` | `foreign rollback`, `foreign revert` |
 
-Neither script touches the tunnel, the panel's inbounds or users, or existing firewall rules. Needs root and `curl dnsutils openssl python3 iproute2 netcat-openbsd sqlite3` (all from apt).
+`status` exits 0 (healthy), 1 (warnings) or 2 (broken). **Common flags:** `--dry-run` prints what would happen and changes nothing, `--yes` accepts plain confirmations (destructive steps that need a typed confirmation say so), `--ascii`, `--no-color`. Backups go to `/root/gemini-shecan-backup/<timestamp>/`. Secrets (Shecan URL, SS key, Telegram token) are never printed or logged.
 
-## Common flags
+`setup-iran.sh` and `setup-foreign.sh` are thin shims kept for the old command lines (`./setup-iran.sh --dry-run`, `./setup-foreign.sh test`); they call `gemini-menu`.
 
-`--dry-run` prints what would happen and changes nothing. `--rollback` undoes the last run that changed something (run it again to go one run further back). `--yes` skips confirmations. Both are idempotent. Backups go to `/root/gemini-shecan-backup/<timestamp>/`.
-
-## 1. Iran server
+### 1. Iran server
 
 ```bash
 export FOREIGN_IP=<foreign server IPv4>
 export SHECAN_REGISTER_URL='<your Shecan registration URL>'      # secret, stored in /etc/gemini-shecan/shecan-url (600)
 # optional: export TG_BOT=... TG_CHAT=...                         # Telegram alerts from the health timer
 
-./setup-iran.sh --dry-run --xray-version <X.Y.Z>
-./setup-iran.sh           --xray-version <X.Y.Z>
+./gemini-menu.sh --role iran setup --dry-run --xray-version <X.Y.Z>
+./gemini-menu.sh --role iran setup           --xray-version <X.Y.Z>
 ```
 
-Get `<X.Y.Z>` from the foreign server (`setup-foreign.sh` prints it too): both Xray versions should match.
-If GitHub is unreachable from Iran, copy a binary over and add `--xray-bin /path/to/xray`.
+Both Xray versions should match (`gemini-menu foreign status` shows the panel's). If GitHub is unreachable from Iran, copy a binary over and add `--xray-bin /path/to/xray`. The SS key comes from `SS_KEY` or `--key-file`, else an existing `/root/gemini-shecan/ss.key`, else it is generated (`openssl rand -base64 16`, mode 600). Options: `--ss-port` (default 20443), `--shecan-url-file FILE`. At the end it prints the key file path and the exact commands for the foreign server.
 
-The SS key is taken from `SS_KEY` or `--key-file`, else an existing `/root/gemini-shecan/ss.key`, else generated with `openssl rand -base64 16` and saved there (mode 600). Options: `--ss-port` (default 20443), `--shecan-url-file FILE` instead of the env var.
+The relay is a separate Xray service `xray-gemini`; its port is opened to the foreign IP only; the Shecan IP is re-registered and the DNS hijack verified every 5 minutes by `gemini-shecan-watch.timer`. The relay's last routing rule (block everything else) is what stops it being an open proxy; setup proves it by fetching `gemini.google.com` through the relay (must work) and `example.com` (must be refused).
 
-At the end it prints the key file path and the exact arguments for the foreign script.
-
-## 2. Foreign server
-
-Copy the key file over (`scp root@<IRAN_IP>:/root/gemini-shecan/ss.key /root/gemini-ss.key`), then:
+### 2. Foreign server
 
 ```bash
-./setup-foreign.sh --dry-run --iran-ip <IRAN_IP> --key-file /root/gemini-ss.key
-./setup-foreign.sh           --iran-ip <IRAN_IP> --key-file /root/gemini-ss.key
-./setup-foreign.sh test
+scp root@<IRAN_IP>:/root/gemini-shecan/ss.key /root/gemini-ss.key && chmod 600 /root/gemini-ss.key
+./gemini-menu.sh --role foreign setup --dry-run --iran-ip <IRAN_IP> --key-file /root/gemini-ss.key
+./gemini-menu.sh --role foreign setup           --iran-ip <IRAN_IP> --key-file /root/gemini-ss.key
+gemini-menu foreign test
 ```
 
-`apply` checks `nc -zv` to the relay first, finds the DB (`--db` to override) and the panel's Xray (`--xray-bin`), patches the template, validates it with the panel's own Xray (`-test`), and only then writes the DB and restarts `x-ui`. **The restart drops all user connections for a few seconds**; you are asked to confirm unless `--yes`. If the restart or the regenerated config does not check out, the template is put back automatically.
+`setup` checks the relay port first, finds the panel database and Xray, patches the Xray **template** (outbound `ir-gemini` appended last; two rules inserted right after `bittorrent -> blocked`: UDP/443 for the domains -> blocked so QUIC falls back to TCP, and the domains -> `ir-gemini`), validates it with the panel's own Xray, and only then writes it. **The restart drops all user connections for a few seconds**, so it asks you to type `yes`. The write is compare-and-swap: if someone saved in the panel in the meantime, nothing is written. If the restart or the regenerated config does not check out, the previous template is restored automatically.
 
-The patch removes the old `gemini-shecan` outbound, rules pointing to it, and gemini-related balancers/observatory selectors; adds `ir-gemini` (appended last, so the default outbound is unchanged); inserts two rules right after the `bittorrent -> blocked` rule (UDP/443 for the domains -> blocked, so QUIC falls back to TCP; the domains -> `ir-gemini`). Nothing else is changed.
+Domain rules need sniffing (tls/http, `routeOnly` off) on the client inbounds; `foreign sniffing audit` lists the ones that would miss, `--fix-sniffing` (or `sniffing fix`) corrects them and keeps the old values in the backup. If the phone client resolves DNS itself and sends IPs, turn on FakeDNS in the client.
 
-`test` starts a temporary local Xray whose only outbound is `ir-gemini` and curls two Gemini hostnames through it (`--all-domains` for all nine). `PASS` = 2xx/3xx. On failure it says which hop is the likely culprit.
+Step-by-step rollout with the "if something goes wrong" commands: [docs/runbook.md](docs/runbook.md).
 
-`audit` (also part of `apply`) lists inbounds whose sniffing would stop domain rules from working. It changes nothing unless you pass `--fix-sniffing`.
+## How the repository is organised
 
-Rollback: `./setup-foreign.sh --rollback` restores the saved template (and sniffing values if `--fix-sniffing` was used) and restarts `x-ui`. It restores only those rows, so traffic counters and clients changed since the backup are kept. `--rollback --restore-full-db` restores the whole DB copy instead.
+```
+src/lib/    foundation: terminal renderer, Enter-confirmed menu engine, action runner, input validation
+src/app/    the tool: Iran modules (10-90) and foreign modules (91-96)
+src/entry/  entry points (gemini-menu = the real tool, demo = a small example of the foundation)
+build.sh    bundles lib + app + entry into ONE file
+dist/       the bundles (committed, so they can be fetched from raw GitHub)
+gemini-menu.sh   a copy of dist/gemini-menu.sh: the canonical install URL (build.sh keeps it in sync)
+tests/      ./tests/run.sh: logic, sandboxed Iran and foreign runs, real-terminal (pty) runs
+docs/       foundation, Iran, foreign, and the rollout runbook
+```
 
-## By hand
-
-- Enable sniffing (`http`, `tls`; `routeOnly` off) on any inbound the audit flags, or use `--fix-sniffing`. Without the destination domain, the connection to `ir-gemini` carries an IP and the Iran relay refuses it.
-- If the phone client misbehaves (it resolves DNS itself and sends IPs), turn on FakeDNS in the client.
-- Keep the Shecan registration alive: the Iran timer re-registers every 5 minutes (`journalctl -u gemini-shecan-watch`).
-
-## Notes
-
-- The Iran relay's last routing rule (block everything else) is what stops it being an open proxy. Xray 26.x rejects a rule with only `outboundTag`, so the script writes it with `"network": "tcp,udp"`. The script also self-tests this: it fetches `gemini.google.com` through the relay (must work) and `example.com` (must be refused).
-- Secrets (Shecan URL, SS key, Telegram token) are never printed or logged; the Shecan URL and Telegram token are passed to curl via stdin config, not on the command line.
+Edit `src/`, run `./build.sh`, run `./tests/run.sh`; never edit `dist/` or the root `gemini-menu.sh` by hand. Details: `docs/phase1-foundation.md`, `docs/phase2-iran.md`, `docs/phase3-foreign.md`.

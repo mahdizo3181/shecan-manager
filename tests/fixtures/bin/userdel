@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+grep -vxF "${@: -1}" "$GM_FAKE/users" >"$GM_FAKE/users.n" 2>/dev/null; mv "$GM_FAKE/users.n" "$GM_FAKE/users" 2>/dev/null; exit 0

@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+echo "$@" >>"$GM_FAKE/systemd-run.log"
+exit 0

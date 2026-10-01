@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+F=${GM_FAKE:?}; res=""; for a in "$@"; do [[ $a == @* ]] && res=${a#@}; done
+if [[ $res == 178.22.122.101 && ! -f $F/dns_bad ]]; then echo 10.10.34.35; else echo 142.250.1.1; fi

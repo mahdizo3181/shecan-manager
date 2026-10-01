@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# fake iptables: INPUT chain rules in a file, policy DROP
+R=$GM_FAKE/iptables.rules; touch "$R"
+case $1 in
+  -S) echo "-P INPUT DROP"; sed 's/^/-A INPUT /' "$R" ;;
+  -C) shift 2; grep -qxF -- "$*" "$R" ;;
+  -I) shift 3; echo "$*" >>"$R" ;;
+  -D) shift 2; grep -qxF -- "$*" "$R" || exit 1; grep -vxF -- "$*" "$R" >"$R.n"; mv "$R.n" "$R" ;;
+  -t) exit 0 ;;
+esac

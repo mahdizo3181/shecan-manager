@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# fake curl: registration (-K -), telegram, socks probes through the "relay"
+F=${GM_FAKE:?}; args=("$@"); proxy=0; url=""
+for ((i=0;i<${#args[@]};i++)); do a=${args[i]}; [[ $a == -x ]] && proxy=1; [[ $a == http* ]] && url=$a; done
+for a in "${args[@]}"; do [[ $a == -K ]] && { cfg=$(cat); url=$(sed -n 's/^url = "\(.*\)"/\1/p' <<<"$cfg"); }; done
+echo "$url" >>"$F/curl.log"
+if ((proxy)); then
+  if [[ $url == *example.com* && ! -f $F/open_proxy ]]; then echo -n 000; exit 56; fi
+  echo -n 200; exit 0
+fi
+[[ $url == *api.telegram.org* ]] && exit 0
+[[ -f $F/reg_fail ]] && exit 22
+exit 0

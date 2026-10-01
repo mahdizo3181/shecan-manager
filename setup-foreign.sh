@@ -1,18 +1,27 @@
 #!/usr/bin/env bash
-# setup-foreign.sh - thin wrapper kept for compatibility. The logic now lives in gemini-menu.sh
-# (same commands and flags as before: [apply|test|audit] --iran-ip --ss-port --key-file --db
-#  --xray-bin --restart-cmd --fix-sniffing --all-domains --dry-run --rollback
-#  --restore-full-db --backup-dir --yes).
-# For the interactive menu just run: ./gemini-menu.sh
+# setup-foreign.sh - backward-compatible shim. The logic lives in gemini-menu:
+#     setup-foreign.sh [flags]         ==  gemini-menu --role foreign apply [flags]
+#     setup-foreign.sh test|audit ...  ==  gemini-menu --role foreign test|audit ...
+#     setup-foreign.sh --yes test      ==  ... test --yes     (was silently run as `apply`: fixed)
+# Run `gemini-menu foreign help` for every command and flag.
 here=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
-menu=$here/gemini-menu.sh
-if [[ ! -x $menu ]]; then menu=$(command -v gemini-menu || true); fi
-if [[ -z $menu ]]; then
-  echo "setup-foreign.sh: gemini-menu.sh was not found next to this script (copy both files together)." >&2
+engine=""
+for cand in "$here/dist/gemini-menu.sh" "$(command -v gemini-menu || true)" "$here/gemini-menu.sh"; do
+  if [[ -n $cand && -x $cand ]]; then engine=$cand; break; fi
+done
+if [[ -z $engine ]]; then
+  echo "setup-foreign.sh: gemini-menu was not found (build it with ./build.sh, or copy it next to this script)." >&2
   exit 1
 fi
-case ${1:-} in
-  apply|test|audit) cmd=$1; shift ;;
-  *) cmd=apply ;;
-esac
-exec "$menu" --role foreign --legacy "$cmd" "$@"
+
+has_cmd=0 skip=0
+for a in "$@"; do
+  if ((skip)); then skip=0; continue; fi
+  case $a in
+    --role | --foreign-ip | --iran-ip | --ss-port | --key-file | --shecan-url-file | --xray-version | --xray-bin | --backup-dir | --db | --restart-cmd) skip=1 ;;
+    -*) ;;
+    *) has_cmd=1; break ;;
+  esac
+done
+if ((has_cmd)); then exec "$engine" --role foreign "$@"; fi
+exec "$engine" --role foreign apply "$@"

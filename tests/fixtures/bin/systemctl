@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# fake systemctl: state under $GM_FAKE/svc. "start" of a unit launches its ExecStart in the background.
+S=$GM_FAKE/svc; mkdir -p "$S"
+args=(); for a in "$@"; do case $a in --quiet|-q|--now|--no-pager|--no-legend|--system) [[ $a == --now ]] && NOW=1; [[ $a == --quiet || $a == -q ]] && QUIET=1 ;; *) args+=("$a") ;; esac; done
+cmd=${args[0]:-}; units=("${args[@]:1}")
+# the fake 3X-UI panel service
+if [[ ${units[0]:-} == x-ui || ${units[0]:-} == x-ui.service ]]; then
+  case $cmd in
+    start|restart|stop) "$(dirname "$0")/xui-fake" "$cmd"; exit $? ;;
+    is-active) "$(dirname "$0")/xui-fake" is-active; r=$?; [[ ${QUIET:-} == 1 ]] || { ((r==0)) && echo active || echo inactive; }; exit $r ;;
+  esac
+fi
+unitfile() { echo "$GM_ROOT/etc/systemd/system/$1.service"; }
+isactive() { local u=$1; if [[ $u == *.timer ]]; then [[ -f $S/$u.active ]]; return; fi
+  [[ -f $S/$u.pid ]] && kill -0 "$(<"$S/$u.pid")" 2>/dev/null; }
+start() { local u=${1%.service}; [[ -f $(unitfile "$u") ]] || { echo "Unit $u.service not found." >&2; return 5; }
+  isactive "$u" && return 0
+  local cmdline; cmdline=$(sed -n 's/^ExecStart=//p' "$(unitfile "$u")" | head -1)
+  # shellcheck disable=SC2086
+  setsid nohup $cmdline >"$S/$u.log" 2>&1 & echo $! >"$S/$u.pid"; sleep 0.3; }
+stop() { local u=${1%.service}; if [[ $1 == *.timer ]]; then rm -f "$S/$1.active"; return 0; fi
+  [[ -f $S/$u.pid ]] && { kill "$(<"$S/$u.pid")" 2>/dev/null; sleep 0.2; rm -f "$S/$u.pid"; }; return 0; }
+case $cmd in
+  daemon-reload) exit 0 ;;
+  enable) for u in "${units[@]}"; do touch "$S/${u%.service}.enabled"; [[ $u == *.timer && ${NOW:-} == 1 ]] && touch "$S/$u.active"; done
+          [[ ${NOW:-} == 1 ]] && for u in "${units[@]}"; do [[ $u != *.timer ]] && start "$u"; done; exit 0 ;;
+  disable) for u in "${units[@]}"; do rm -f "$S/${u%.service}.enabled"; [[ ${NOW:-} == 1 ]] && stop "$u"; done; exit 0 ;;
+  start) start "${units[0]}"; exit $? ;;
+  stop) for u in "${units[@]}"; do stop "$u"; done; exit 0 ;;
+  restart) stop "${units[0]}"; start "${units[0]}"; exit $? ;;
+  is-active) if isactive "${units[0]%.service}" || isactive "${units[0]}"; then [[ ${QUIET:-} == 1 ]] || echo active; exit 0; else [[ ${QUIET:-} == 1 ]] || echo inactive; exit 3; fi ;;
+  list-units|cat|show) exit 0 ;;
+  *) exit 0 ;;
+esac

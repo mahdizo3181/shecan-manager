@@ -1,0 +1,42 @@
+#!/usr/bin/env python3
+"""fake 3X-UI service: 'start' regenerates config.json from the DB template and launches a process named
+xray-linux-test (what the tool's pgrep -x matches). XUI_FAKE_FAIL_ONCE: the next start that sees ir-gemini
+in the template does not bring Xray up (and the marker is consumed), to test the automatic restore."""
+import os, signal, sqlite3, subprocess, sys, time
+act = sys.argv[1]
+fake, db, d = os.environ["GM_FAKE"], os.environ["XUI_FAKE_DB"], os.environ["XUI_FAKE_DIR"]
+pidf = os.path.join(fake, "xui.pid")
+
+def pid():
+    try:
+        p = int(open(pidf).read())
+        os.kill(p, 0)
+        return p
+    except Exception:
+        return None
+
+def stop():
+    p = pid()
+    if p:
+        try: os.kill(p, signal.SIGKILL)
+        except Exception: pass
+        time.sleep(0.1)
+    try: os.remove(pidf)
+    except Exception: pass
+
+if act in ("start", "restart"):
+    stop()
+    tpl = sqlite3.connect(db).execute("select value from settings where key='xrayTemplateConfig'").fetchone()[0]
+    open(os.path.join(d, "config.json"), "w").write(tpl)
+    marker = os.path.join(fake, "xui_fail_once")
+    if "ir-gemini" in tpl and os.path.exists(marker):
+        os.remove(marker)
+        sys.exit(0)
+    code = "import ctypes,time; ctypes.CDLL(None).prctl(15,b'xray-linux-test',0,0,0); time.sleep(1000000)"
+    p = subprocess.Popen([sys.executable, "-c", code], start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    open(pidf, "w").write(str(p.pid))
+    time.sleep(0.3)
+elif act == "stop":
+    stop()
+elif act == "is-active":
+    sys.exit(0 if pid() else 3)
